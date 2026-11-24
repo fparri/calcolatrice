@@ -51,8 +51,8 @@ class MainActivity : Activity() {
             Configuration.UI_MODE_NIGHT_YES
         palette = buildPalette(isDark)
 
-        setupEdgeToEdge(isDark)
         setContentView(buildUi())
+        setupEdgeToEdge(isDark)
         refreshDisplay()
     }
 
