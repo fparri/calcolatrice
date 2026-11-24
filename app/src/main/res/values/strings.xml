@@ -1,3 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Calcolatrice</string>
+    <string name="app_name">Calculator</string>
+    <string name="history">History</string>
+    <string name="history_empty">No calculations yet</string>
+    <string name="clear_history">Clear</string>
+    <string name="copied">Copied to clipboard</string>
+    <string name="copy_result">copy the result</string>
+    <string name="use_value">use this value</string>
+    <string name="angle_degrees_short" translatable="false">DEG</string>
+    <string name="angle_radians_short" translatable="false">RAD</string>
+    <string name="angle_degrees">Degrees</string>
+    <string name="angle_radians">Radians</string>
+    <string name="angle_toggle">Angle unit: %1$s</string>
+    <string name="inverse_short" translatable="false">INV</string>
+    <string name="inverse">Inverse functions</string>
+    <string name="show_scientific">Show scientific functions</string>
+    <string name="hide_scientific">Hide scientific functions</string>
+    <string name="error_division_by_zero">Can\'t divide by zero</string>
+    <string name="error_undefined">Result undefined</string>
+    <string name="error_overflow">Number too large</string>
+    <string name="error_syntax">Invalid expression</string>
+    <string name="key_plus">plus</string>
+    <string name="key_minus">minus</string>
+    <string name="key_multiply">times</string>
+    <string name="key_divide">divided by</string>
+    <string name="key_equals">equals</string>
+    <string name="key_decimal">decimal point</string>
+    <string name="key_percent">percent</string>
+    <string name="key_backspace">Delete</string>
+    <string name="key_clear">Clear all</string>
+    <string name="key_parentheses">parentheses</string>
+    <string name="key_open_paren">open parenthesis</string>
+    <string name="key_close_paren">close parenthesis</string>
+    <string name="key_power">to the power of</string>
+    <string name="key_sqrt">square root</string>
+    <string name="key_square">squared</string>
+    <string name="key_reciprocal">reciprocal</string>
+    <string name="key_factorial">factorial</string>
+    <string name="key_pi">pi</string>
+    <string name="key_e">Euler\'s number</string>
+    <string name="key_sin">sine</string>
+    <string name="key_cos">cosine</string>
+    <string name="key_tan">tangent</string>
+    <string name="key_asin">arcsine</string>
+    <string name="key_acos">arccosine</string>
+    <string name="key_atan">arctangent</string>
+    <string name="key_ln">natural logarithm</string>
+    <string name="key_log">base 10 logarithm</string>
+    <string name="key_exp_e">e to the power of</string>
+    <string name="key_exp_10">ten to the power of</string>
 </resources>
