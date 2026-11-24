@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Colori fissi per Android 8-11 (tema chiaro) -->
+    <color name="background">#FFFBF8FF</color>
+    <color name="on_background">#FF1B1B21</color>
+    <color name="on_background_variant">#FF46464F</color>
+    <color name="panel">#FFEFEDF4</color>
+    <color name="accent">#FF4355B9</color>
+    <color name="error">#FFB3261E</color>
+    <color name="key_number">#FFE4E1E9</color>
+    <color name="key_operator">#FFE0E1F9</color>
+    <color name="on_key_operator">#FF181A2C</color>
+    <color name="key_clear">#FFFFD7F1</color>
+    <color name="on_key_clear">#FF2D1228</color>
+    <color name="key_equals">#FF4355B9</color>
+    <color name="on_key_equals">#FFFFFFFF</color>
+    <color name="ic_launcher_background">#FF3F51B5</color>
+    <color name="ic_launcher_foreground">#FFFFFFFF</color>
+</resources>

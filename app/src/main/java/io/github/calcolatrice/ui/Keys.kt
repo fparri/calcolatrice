@@ -1,0 +1,140 @@
+package io.github.calcolatrice.ui
+
+import android.content.Context
+import io.github.calcolatrice.R
+import io.github.calcolatrice.engine.AngleUnit
+import io.github.calcolatrice.engine.CalcKey
+
+/** Azioni dei tasti: input per l'editor oppure comandi dell'interfaccia. */
+sealed interface PadAction {
+    data class Input(val key: CalcKey) : PadAction
+    data object ToggleInverse : PadAction
+    data object ToggleAngle : PadAction
+    data object ToggleScientific : PadAction
+    data object ShowHistory : PadAction
+}
+
+enum class KeyStyle { Number, Operator, Clear, Equals, Function, Toggle }
+
+data class PadKey(
+    val label: String,
+    val action: PadAction,
+    val style: KeyStyle,
+    /** Testo letto da TalkBack; se null viene letta l'etichetta. */
+    val description: String? = null,
+    val icon: Int? = null,
+    val active: Boolean = false,
+    val longPressAction: PadAction? = null,
+)
+
+/** Definizione di tutti i tasti, con le descrizioni per l'accessibilità nella lingua del telefono. */
+class KeyFactory(private val context: Context) {
+
+    private fun s(id: Int) = context.getString(id)
+    private fun input(key: CalcKey) = PadAction.Input(key)
+    private fun digit(d: Char) = PadKey(d.toString(), input(CalcKey.Digit(d)), KeyStyle.Number)
+    private fun op(label: String, symbol: Char, description: Int) =
+        PadKey(label, input(CalcKey.Operator(symbol)), KeyStyle.Operator, s(description))
+    private fun fn(label: String, key: CalcKey, description: Int) =
+        PadKey(label, input(key), KeyStyle.Function, s(description))
+
+    /** Tastierino principale: 4 colonne × 5 righe. */
+    fun main(decimalSeparator: Char): List<List<PadKey>> = listOf(
+        listOf(
+            PadKey("AC", input(CalcKey.Clear), KeyStyle.Clear, s(R.string.key_clear)),
+            PadKey("( )", input(CalcKey.Parentheses), KeyStyle.Operator, s(R.string.key_parentheses)),
+            PadKey("%", input(CalcKey.Percent), KeyStyle.Operator, s(R.string.key_percent)),
+            op("÷", '/', R.string.key_divide),
+        ),
+        listOf(digit('7'), digit('8'), digit('9'), op("×", '*', R.string.key_multiply)),
+        listOf(digit('4'), digit('5'), digit('6'), op("−", '-', R.string.key_minus)),
+        listOf(digit('1'), digit('2'), digit('3'), op("+", '+', R.string.key_plus)),
+        listOf(
+            digit('0'),
+            PadKey(decimalSeparator.toString(), input(CalcKey.Decimal), KeyStyle.Number, s(R.string.key_decimal)),
+            PadKey(
+                "", input(CalcKey.Backspace), KeyStyle.Number, s(R.string.key_backspace),
+                icon = R.drawable.ic_backspace, longPressAction = input(CalcKey.Clear),
+            ),
+            PadKey("=", input(CalcKey.Equals), KeyStyle.Equals, s(R.string.key_equals)),
+        ),
+    )
+
+    fun expandKey(expanded: Boolean) = PadKey(
+        "", PadAction.ToggleScientific, KeyStyle.Function,
+        s(if (expanded) R.string.hide_scientific else R.string.show_scientific),
+        icon = if (expanded) R.drawable.ic_expand_less else R.drawable.ic_expand_more,
+    )
+
+    fun historyKey() = PadKey(
+        "", PadAction.ShowHistory, KeyStyle.Function, s(R.string.history), icon = R.drawable.ic_history,
+    )
+
+    private fun inverseKey(inverse: Boolean) = PadKey(
+        s(R.string.inverse_short), PadAction.ToggleInverse, KeyStyle.Toggle, s(R.string.inverse),
+        active = inverse,
+    )
+
+    private fun angleKey(angleUnit: AngleUnit): PadKey {
+        val degrees = angleUnit == AngleUnit.DEGREES
+        val name = s(if (degrees) R.string.angle_degrees else R.string.angle_radians)
+        return PadKey(
+            s(if (degrees) R.string.angle_degrees_short else R.string.angle_radians_short),
+            PadAction.ToggleAngle, KeyStyle.Toggle, context.getString(R.string.angle_toggle, name),
+        )
+    }
+
+    private fun trigKeys(inverse: Boolean) = if (inverse) {
+        listOf(
+            fn("sin⁻¹", CalcKey.Function("asin"), R.string.key_asin),
+            fn("cos⁻¹", CalcKey.Function("acos"), R.string.key_acos),
+            fn("tan⁻¹", CalcKey.Function("atan"), R.string.key_atan),
+        )
+    } else {
+        listOf(
+            fn("sin", CalcKey.Function("sin"), R.string.key_sin),
+            fn("cos", CalcKey.Function("cos"), R.string.key_cos),
+            fn("tan", CalcKey.Function("tan"), R.string.key_tan),
+        )
+    }
+
+    private fun logKeys(inverse: Boolean) = if (inverse) {
+        listOf(fn("eˣ", CalcKey.ExpE, R.string.key_exp_e), fn("10ˣ", CalcKey.Exp10, R.string.key_exp_10))
+    } else {
+        listOf(
+            fn("ln", CalcKey.Function("ln"), R.string.key_ln),
+            fn("log", CalcKey.Function("log"), R.string.key_log),
+        )
+    }
+
+    private fun rootKey(inverse: Boolean) = if (inverse) {
+        fn("x²", CalcKey.Square, R.string.key_square)
+    } else {
+        fn("√", CalcKey.SquareRoot, R.string.key_sqrt)
+    }
+
+    private fun powerKey() = fn("xʸ", CalcKey.Operator('^'), R.string.key_power)
+    private fun piKey() = fn("π", CalcKey.Constant('π'), R.string.key_pi)
+    private fun eKey() = fn("e", CalcKey.Constant('e'), R.string.key_e)
+    private fun factorialKey() = fn("x!", CalcKey.Factorial, R.string.key_factorial)
+
+    /** In verticale: 4 colonne × 3 righe (la prima sempre visibile). */
+    fun scientificPortrait(inverse: Boolean, angleUnit: AngleUnit): List<List<PadKey>> = listOf(
+        listOf(inverseKey(inverse), angleKey(angleUnit), rootKey(inverse), powerKey()),
+        trigKeys(inverse) + piKey(),
+        logKeys(inverse) + factorialKey() + eKey(),
+    )
+
+    /** In orizzontale: 3 colonne × 5 righe, allineate al tastierino principale. */
+    fun scientificLandscape(inverse: Boolean, angleUnit: AngleUnit): List<List<PadKey>> = listOf(
+        listOf(inverseKey(inverse), angleKey(angleUnit), powerKey()),
+        trigKeys(inverse),
+        logKeys(inverse) + rootKey(inverse),
+        listOf(piKey(), eKey(), factorialKey()),
+        listOf(
+            fn("(", CalcKey.OpenParen, R.string.key_open_paren),
+            fn(")", CalcKey.CloseParen, R.string.key_close_paren),
+            fn("1/x", CalcKey.Reciprocal, R.string.key_reciprocal),
+        ),
+    )
+}

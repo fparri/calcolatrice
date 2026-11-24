@@ -1,0 +1,17 @@
+# Nessuna libreria nell'app: solo il plugin Android e, per i test, JUnit.
+[versions]
+agp = "9.3.3"
+# Runtime di Kotlin (non è una libreria esterna). Versione minima: Gradle usa automaticamente
+# quella più recente richiesta dal supporto Kotlin integrato in AGP 9; R8 lo riduce a pochi KB.
+kotlinStdlib = "2.2.10"
+junit = "4.13.2"
+compileSdk = "37"
+targetSdk = "37"
+minSdk = "26"
+
+[libraries]
+kotlin-stdlib = { group = "org.jetbrains.kotlin", name = "kotlin-stdlib", version.ref = "kotlinStdlib" }
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }

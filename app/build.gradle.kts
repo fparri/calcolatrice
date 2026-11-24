@@ -1,28 +1,52 @@
 plugins {
-    id("com.android.application")
-    id("org.jetbrains.kotlin.android")
-    id("org.jetbrains.kotlin.plugin.compose")
+    alias(libs.plugins.android.application)
+    // Con AGP 9 il supporto Kotlin è integrato: nessun plugin Kotlin aggiuntivo.
 }
 
+// Valori passati dal workflow di GitHub Actions (vedi .github/workflows/build.yml).
+val ciVersionCode = providers.environmentVariable("VERSION_CODE").orNull?.toIntOrNull()
+val ciVersionName = providers.environmentVariable("VERSION_NAME").orNull
+val signingKeystore = providers.environmentVariable("SIGNING_KEYSTORE_PATH").orNull?.takeIf { it.isNotBlank() }
+
 android {
-    namespace = "com.example.calculator"
-    compileSdk = 35
+    namespace = "io.github.calcolatrice"
+    compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {
-        applicationId = "com.example.calculator"
-        minSdk = 26
-        targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        applicationId = "io.github.calcolatrice"
+        minSdk = libs.versions.minSdk.get().toInt()
+        targetSdk = libs.versions.targetSdk.get().toInt()
+        versionCode = ciVersionCode ?: 1
+        versionName = ciVersionName ?: "1.0"
+    }
+
+    signingConfigs {
+        if (signingKeystore != null) {
+            create("release") {
+                storeFile = file(signingKeystore)
+                storePassword = providers.environmentVariable("SIGNING_STORE_PASSWORD").orNull
+                keyAlias = providers.environmentVariable("SIGNING_KEY_ALIAS").orNull
+                keyPassword = providers.environmentVariable("SIGNING_KEY_PASSWORD").orNull
+            }
+        }
     }
 
     buildTypes {
-        release {
+        getByName("release") {
+            // R8: rimuove il codice inutilizzato, ottimizza e offusca. Rimuove anche le risorse inutili.
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt")
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
             )
+            // Con i Secrets configurati usa la tua chiave; altrimenti la chiave di debug,
+            // così l'APK di release è comunque installabile.
+            signingConfig = if (signingKeystore != null) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 
@@ -31,24 +55,13 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-
-    buildFeatures {
-        compose = true
+    androidResources {
+        // Scelta della lingua per singola app nelle impostazioni di Android 13+.
+        generateLocaleConfig = true
     }
 }
 
 dependencies {
-    val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
-    implementation(composeBom)
-
-    implementation("androidx.core:core-ktx:1.15.0")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
-    implementation("androidx.activity:activity-compose:1.9.3")
-    implementation("androidx.compose.ui:ui")
-    implementation("androidx.compose.ui:ui-graphics")
-    implementation("androidx.compose.material3:material3")
+    implementation(libs.kotlin.stdlib)
+    testImplementation(libs.junit)
 }
