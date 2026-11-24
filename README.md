@@ -1,15 +1,14 @@
-# Calcolatrice Android (Kotlin + Jetpack Compose)
+# Calcolatrice Android Lite (Zero Dipendenze)
 
-App calcolatrice moderna per Android sviluppata in **Kotlin** con **Jetpack Compose** e **Material 3 (Material You)**.
+App calcolatrice ultra-leggera in **Kotlin puro** senza librerie esterne (niente Jetpack Compose, niente AndroidX, niente Material library).
 
 ## Caratteristiche
-- Material 3 con supporto **Dynamic Color** (Android 12+) e tema chiaro/scuro automatico.
-- Layout **Edge-to-Edge**.
-- Calcoli ad alta precisione tramite `BigDecimal`.
-- Feedback aptico sui tasti.
-- Compilazione automatica dell'APK tramite **GitHub Actions**.
+- **Zero dipendenze esterne:** usa solo le API native del sistema operativo Android.
+- **APK ultra-compatto (~50–150 KB):** compilato in modalità Release con ottimizzatore R8 e rimozione metadati superflui.
+- **UI moderna:** supporto **Dynamic Color** nativo (Android 12+), tema chiaro/scuro automatico, layout **Edge-to-Edge**, tasti circolari con effetto ripple e feedback aptico.
+- **Precisione decimale:** calcoli basati su `BigDecimal`.
 
 ## Come ottenere l'APK
-1. Carica questo progetto su un repository GitHub (branch `main`).
-2. Apri la scheda **Actions** su GitHub e attendi il completamento del workflow **Build Android APK**.
-3. Scarica l'artifact **Calcolatrice-APK**, estrai lo zip e installa `app-debug.apk` sul tuo dispositivo Android.
+1. Carica i file su un repository GitHub (branch `main`).
+2. Apri la scheda **Actions** e attendi il completamento di **Build Android Lite APK**.
+3. Scarica l'artifact **Calcolatrice-Lite-APK**, estrai lo `.zip` e installa `app-release.apk`.

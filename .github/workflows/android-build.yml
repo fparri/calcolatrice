@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build Android Lite APK
 
 on:
   push:
@@ -24,11 +24,14 @@ jobs:
         with:
           gradle-version: '8.10.2'
 
-      - name: Build Debug APK
-        run: gradle assembleDebug
+      - name: Build Release APK (R8 Optimized)
+        run: gradle assembleRelease
+
+      - name: Check APK size
+        run: ls -lh app/build/outputs/apk/release/app-release.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Calcolatrice-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: Calcolatrice-Lite-APK
+          path: app/build/outputs/apk/release/app-release.apk
