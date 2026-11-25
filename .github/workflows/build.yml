@@ -1,14 +1,14 @@
-# Compila l'APK di release a ogni push e lo rende scaricabile da GitHub.
+# Compila e firma l'APK Release di Calcolatrice Lite.
 #
-# - L'APK è nella pagina dell'esecuzione (tab "Actions"), sezione "Artifacts".
-# - Firma: con i Secrets SIGNING_* usa la tua chiave; altrimenti una chiave di debug
-#   conservata nella cache di GitHub, così le nuove versioni si installano sopra le vecchie.
-# - Un tag "v*" (es. v1.0.0) crea anche una Release con l'APK allegato.
+# - Utilizza esclusivamente la chiave privata permanente.
+# - Verifica la firma e il certificato dell'APK.
+# - Un tag "v*" crea anche una Release con l'APK allegato.
+
 name: Build APK
 
 on:
   push:
-    branches: ["**"]
+    branches: ["calcolatrice-lite"]
     tags: ["v*"]
   workflow_dispatch:
 
@@ -23,8 +23,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+
     env:
-      HAS_SIGNING: ${{ secrets.SIGNING_KEYSTORE_BASE64 != '' }}
       VERSION_CODE: ${{ github.run_number }}
       VERSION_NAME: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('1.0.{0}', github.run_number) }}
 
@@ -41,50 +41,92 @@ jobs:
       - name: Imposta Gradle (con cache)
         uses: gradle/actions/setup-gradle@v6
 
-      - name: Recupera la chiave di debug dalla cache
-        if: env.HAS_SIGNING != 'true'
-        uses: actions/cache@v6
-        with:
-          path: ~/.android/debug.keystore
-          key: debug-keystore-v1
-
       - name: Ripristina il keystore dai Secrets
-        if: env.HAS_SIGNING == 'true'
         env:
-          SIGNING_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
-        run: echo "$SIGNING_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
+          SIGNING_KEYSTORE_BASE64: ${{ secrets.LITE_KEYSTORE_BASE64 }}
+          SIGNING_STORE_PASSWORD: ${{ secrets.LITE_KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          umask 077
+
+          : "${SIGNING_KEYSTORE_BASE64:?Secret mancante}"
+          : "${SIGNING_STORE_PASSWORD:?Password mancante}"
+
+          printf '%s' "$SIGNING_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.p12"
+
+          keytool -list \
+            -keystore "$RUNNER_TEMP/release.p12" \
+            -storetype PKCS12 \
+            -alias calcolatrice-lite \
+            -storepass:env SIGNING_STORE_PASSWORD
 
       - name: Test unitari
         run: |
           chmod +x gradlew
           ./gradlew testDebugUnitTest
 
-      - name: Compila APK di release
+      - name: Compila APK Release firmato
         env:
-          SIGNING_KEYSTORE_PATH: ${{ env.HAS_SIGNING == 'true' && format('{0}/release.jks', runner.temp) || '' }}
-          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
-          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
-          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+          SIGNING_KEYSTORE_PATH: ${{ runner.temp }}/release.p12
+          SIGNING_STORE_PASSWORD: ${{ secrets.LITE_KEYSTORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: calcolatrice-lite
+          SIGNING_KEY_PASSWORD: ${{ secrets.LITE_KEYSTORE_PASSWORD }}
         run: |
-          [ -n "$SIGNING_KEYSTORE_PATH" ] || unset SIGNING_KEYSTORE_PATH
+          set -euo pipefail
+
           ./gradlew assembleRelease
-          cp app/build/outputs/apk/release/app-release.apk "calcolatrice-${VERSION_NAME}.apk"
+
+          cp app/build/outputs/apk/release/app-release.apk \
+            "calcolatrice-${VERSION_NAME}.apk"
+
           ls -lh "calcolatrice-${VERSION_NAME}.apk"
 
-      - name: Carica l'APK
+      - name: Verifica firma digitale APK
+        env:
+          SIGNING_STORE_PASSWORD: ${{ secrets.LITE_KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" \
+            -type f -name apksigner | sort -V | tail -n 1)
+
+          test -x "$APKSIGNER"
+
+          VERIFY_OUTPUT=$("$APKSIGNER" verify \
+            --verbose --print-certs \
+            "calcolatrice-${VERSION_NAME}.apk")
+
+          printf '%s\n' "$VERIFY_OUTPUT"
+
+          EXPECTED_CERT=$(keytool -exportcert \
+            -keystore "$RUNNER_TEMP/release.p12" \
+            -storetype PKCS12 \
+            -alias calcolatrice-lite \
+            -storepass:env SIGNING_STORE_PASSWORD \
+            | sha256sum | cut -d ' ' -f 1)
+
+          printf '%s\n' "$VERIFY_OUTPUT" | grep -F \
+            "Signer #1 certificate SHA-256 digest: $EXPECTED_CERT"
+
+          echo "APK firmato correttamente con la chiave privata."
+
+      - name: Carica l'APK firmato
         uses: actions/upload-artifact@v7
         with:
-          name: calcolatrice-${{ env.VERSION_NAME }}
+          name: calcolatrice-lite-${{ env.VERSION_NAME }}-SIGNED
           path: calcolatrice-${{ env.VERSION_NAME }}.apk
+          if-no-files-found: error
 
       - name: Pubblica la Release su GitHub
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" "calcolatrice-${VERSION_NAME}.apk" \
-            --title "Calcolatrice $GITHUB_REF_NAME" --generate-notes
+          gh release create "$GITHUB_REF_NAME" \
+            "calcolatrice-${VERSION_NAME}.apk" \
+            --title "Calcolatrice Lite $GITHUB_REF_NAME" \
+            --generate-notes
 
       - name: Elimina il keystore
         if: always()
-        run: rm -f "$RUNNER_TEMP/release.jks"
+        run: rm -f "$RUNNER_TEMP/release.p12"
