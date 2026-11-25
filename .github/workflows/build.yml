@@ -1,7 +1,9 @@
 # Compila e firma l'APK Release di Calcolatrice Lite.
 #
 # - Utilizza esclusivamente la chiave privata permanente.
-# - Verifica la firma e il certificato dell'APK.
+# - Esegue i test unitari.
+# - Verifica la firma digitale e il certificato SHA-256.
+# - Genera automaticamente il numero di versione.
 # - Un tag "v*" crea anche una Release con l'APK allegato.
 
 name: Build APK
@@ -52,13 +54,16 @@ jobs:
           : "${SIGNING_KEYSTORE_BASE64:?Secret mancante}"
           : "${SIGNING_STORE_PASSWORD:?Password mancante}"
 
-          printf '%s' "$SIGNING_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.p12"
+          printf '%s' "$SIGNING_KEYSTORE_BASE64" \
+            | base64 --decode > "$RUNNER_TEMP/release.p12"
 
           keytool -list \
             -keystore "$RUNNER_TEMP/release.p12" \
             -storetype PKCS12 \
             -alias calcolatrice-lite \
             -storepass:env SIGNING_STORE_PASSWORD
+
+          echo "Keystore ripristinato e verificato correttamente."
 
       - name: Test unitari
         run: |
@@ -81,20 +86,26 @@ jobs:
 
           ls -lh "calcolatrice-${VERSION_NAME}.apk"
 
+          echo "APK Release compilato correttamente."
+
       - name: Verifica firma digitale APK
         env:
           SIGNING_STORE_PASSWORD: ${{ secrets.LITE_KEYSTORE_PASSWORD }}
         run: |
           set -euo pipefail
 
+          APK="calcolatrice-${VERSION_NAME}.apk"
+
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" \
             -type f -name apksigner | sort -V | tail -n 1)
 
           test -x "$APKSIGNER"
+          test -f "$APK"
+
+          echo "Verifica della firma digitale..."
 
           VERIFY_OUTPUT=$("$APKSIGNER" verify \
-            --verbose --print-certs \
-            "calcolatrice-${VERSION_NAME}.apk")
+            --verbose --print-certs "$APK")
 
           printf '%s\n' "$VERIFY_OUTPUT"
 
@@ -105,10 +116,30 @@ jobs:
             -storepass:env SIGNING_STORE_PASSWORD \
             | sha256sum | cut -d ' ' -f 1)
 
-          printf '%s\n' "$VERIFY_OUTPUT" | grep -F \
-            "Signer #1 certificate SHA-256 digest: $EXPECTED_CERT"
+          ACTUAL_CERT=$(printf '%s\n' "$VERIFY_OUTPUT" \
+            | awk -F ': ' '/certificate SHA-256 digest:/ {print tolower($NF)}' \
+            | sort -u)
 
-          echo "APK firmato correttamente con la chiave privata."
+          echo ""
+          echo "Certificato atteso: $EXPECTED_CERT"
+          echo "Certificato APK:    $ACTUAL_CERT"
+          echo ""
+
+          if [ -z "$ACTUAL_CERT" ]; then
+            echo "ERRORE: certificato APK non trovato."
+            exit 1
+          fi
+
+          if [ "$EXPECTED_CERT" != "$ACTUAL_CERT" ]; then
+            echo "ERRORE: certificato non corrispondente."
+            exit 1
+          fi
+
+          echo "========================================"
+          echo "APK FIRMATO CORRETTAMENTE"
+          echo "Firma digitale: VALIDA"
+          echo "Certificato SHA-256: CORRISPONDENTE"
+          echo "========================================"
 
       - name: Carica l'APK firmato
         uses: actions/upload-artifact@v7
