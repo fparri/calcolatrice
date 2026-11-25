@@ -38,6 +38,10 @@ internal class CalcException(val error: CalcError) : RuntimeException(error.name
  * - costanti `π`, `e` e `@` (risultato precedente, "Ans")
  * - `√` (radice quadrata, prefisso) e funzioni `sin( cos( tan( asin( acos( atan( ln( log(`
  *
+ * `√` si applica solo all'operando che lo segue: `√9! = (√9)!`, `√4^2 = (√4)^2`.
+ * Dopo `+` o `−` la percentuale si riferisce al valore precedente, come sulle calcolatrici
+ * tascabili: `200+10% = 220`, `200−10% = 180`; altrove `%` divide per 100 (`50×10% = 5`).
+ *
  * Le parentesi lasciate aperte vengono chiuse automaticamente.
  * La moltiplicazione implicita è supportata: `2π`, `3(4+1)`, `2sin(30)`.
  */
@@ -247,7 +251,11 @@ internal object MathSupport {
         val value = when (name) {
             "sin" -> sin(radians)
             "cos" -> cos(radians)
-            else -> tan(radians)
+            else -> {
+                // Multipli dispari di π/2: il coseno è zero a meno di residui numerici.
+                if (abs(cos(radians)) < 1e-15) throw CalcException(CalcError.UNDEFINED)
+                tan(radians)
+            }
         }
         // Elimina i residui numerici come sin(π) = 1.2E-16.
         if (abs(value) < 1e-15 && abs(radians) >= 1) return BigDecimal.ZERO
@@ -283,6 +291,12 @@ private class Parser(
     private var pos = 0
     private val mc = MathSupport.MC
 
+    /** True se l'ultimo postfisso applicato da [parsePostfix] è `%`. */
+    private var postfixWasPercent = false
+
+    /** True se l'ultimo termine letto da [parseTerm] è una percentuale semplice (es. `10%`). */
+    private var termIsPercent = false
+
     fun parse(): BigDecimal {
         val value = parseExpression()
         if (pos != tokens.size) throw CalcException(CalcError.SYNTAX)
@@ -301,7 +315,9 @@ private class Parser(
             val t = peek()
             if (t is Token.Operator && (t.symbol == '+' || t.symbol == '-')) {
                 pos++
-                val right = parseTerm()
+                var right = parseTerm()
+                // a ± b% = a ± a·b/100 (sconti e maggiorazioni).
+                if (termIsPercent) right = left.multiply(right, mc)
                 left = MathSupport.checked(
                     if (t.symbol == '+') left.add(right, mc) else left.subtract(right, mc),
                 )
@@ -314,21 +330,30 @@ private class Parser(
     // termine := unario (('*' | '/') unario | unario)*   (moltiplicazione implicita)
     private fun parseTerm(): BigDecimal {
         var left = parseUnary()
+        var percent = postfixWasPercent
         while (true) {
             val t = peek()
             left = when {
                 t is Token.Operator && t.symbol == '*' -> {
                     pos++
+                    percent = false
                     MathSupport.checked(left.multiply(parseUnary(), mc))
                 }
                 t is Token.Operator && t.symbol == '/' -> {
                     pos++
+                    percent = false
                     val divisor = parseUnary()
                     if (divisor.signum() == 0) throw CalcException(CalcError.DIVISION_BY_ZERO)
                     MathSupport.checked(left.divide(divisor, mc))
                 }
-                t != null && startsOperand(t) -> MathSupport.checked(left.multiply(parseUnary(), mc))
-                else -> return left
+                t != null && startsOperand(t) -> {
+                    percent = false
+                    MathSupport.checked(left.multiply(parseUnary(), mc))
+                }
+                else -> {
+                    termIsPercent = percent
+                    return left
+                }
             }
         }
     }
@@ -356,23 +381,29 @@ private class Parser(
         val t = peek()
         if (t is Token.Operator && t.symbol == '^') {
             pos++
-            return MathSupport.power(base, parseUnary())
+            val result = MathSupport.power(base, parseUnary())
+            postfixWasPercent = false
+            return result
         }
         return base
     }
 
-    // postfisso := primario ('!' | '%')*
+    // postfisso := primario ('!' | '%')*      primario può essere '√' primario
     private fun parsePostfix(): BigDecimal {
         var value = parsePrimary()
+        var percent = false
         while (true) {
-            val t = peek() as? Token.Postfix ?: return value
+            val t = peek() as? Token.Postfix ?: break
             pos++
+            percent = t.symbol == '%'
             value = if (t.symbol == '!') {
                 MathSupport.factorial(value)
             } else {
                 value.divide(BigDecimal(100), mc)
             }
         }
+        postfixWasPercent = percent
+        return value
     }
 
     private fun parsePrimary(): BigDecimal = when (val t = next()) {
@@ -388,8 +419,22 @@ private class Parser(
             expectCloseParen()
             applyFunction(t.name, argument)
         }
-        Token.Sqrt -> MathSupport.sqrt(parseUnary())
+        Token.Sqrt -> MathSupport.sqrt(parseSqrtOperand())
         else -> throw CalcException(CalcError.SYNTAX)
+    }
+
+    /** Operando di √: solo il numero, la costante o il blocco tra parentesi che lo segue. */
+    private fun parseSqrtOperand(): BigDecimal {
+        val t = peek()
+        if (t is Token.Operator && t.symbol == '-') {
+            pos++
+            return parseSqrtOperand().negate()
+        }
+        if (t is Token.Operator && t.symbol == '+') {
+            pos++
+            return parseSqrtOperand()
+        }
+        return parsePrimary()
     }
 
     /** Accetta ')' oppure la fine dell'espressione (parentesi chiusa automaticamente). */

@@ -4,6 +4,7 @@ import android.content.Context
 import io.github.calcolatrice.R
 import io.github.calcolatrice.engine.AngleUnit
 import io.github.calcolatrice.engine.CalcKey
+import io.github.calcolatrice.engine.EquationMode
 
 /** Azioni dei tasti: input per l'editor oppure comandi dell'interfaccia. */
 sealed interface PadAction {
@@ -12,7 +13,14 @@ sealed interface PadAction {
     data object ToggleAngle : PadAction
     data object ToggleScientific : PadAction
     data object ShowHistory : PadAction
+    data object OpenEquations : PadAction
+    data object Back : PadAction
+    data class SetEquationMode(val mode: EquationMode) : PadAction
+    data class Equation(val command: EquationCommand) : PadAction
 }
+
+/** Comandi della schermata equazioni. */
+enum class EquationCommand { NEXT_CELL, PREVIOUS_CELL, CLEAR_CELLS, TOGGLE_FRACTION }
 
 enum class KeyStyle { Number, Operator, Clear, Equals, Function, Toggle }
 
@@ -68,6 +76,67 @@ class KeyFactory(private val context: Context) {
 
     fun historyKey() = PadKey(
         "", PadAction.ShowHistory, KeyStyle.Function, s(R.string.history), icon = R.drawable.ic_history,
+    )
+
+    fun equationsKey() = PadKey(
+        "", PadAction.OpenEquations, KeyStyle.Function, s(R.string.equations), icon = R.drawable.ic_equation,
+    )
+
+    // ------------------------------------------------------------ schermata equazioni
+
+    fun backKey() = PadKey("", PadAction.Back, KeyStyle.Function, s(R.string.back), icon = R.drawable.ic_arrow_back)
+
+    fun fractionKey(asFraction: Boolean) = PadKey(
+        s(R.string.fraction_short), PadAction.Equation(EquationCommand.TOGGLE_FRACTION), KeyStyle.Toggle,
+        s(R.string.show_fractions), active = asFraction,
+    )
+
+    fun equationModes(current: EquationMode): List<PadKey> = listOf(
+        Triple(EquationMode.SYSTEM_2, R.string.mode_system_2, R.string.mode_system_2_description),
+        Triple(EquationMode.SYSTEM_3, R.string.mode_system_3, R.string.mode_system_3_description),
+        Triple(EquationMode.QUADRATIC, R.string.mode_quadratic, R.string.mode_quadratic_description),
+    ).map { (mode, label, description) ->
+        PadKey(s(label), PadAction.SetEquationMode(mode), KeyStyle.Toggle, s(description), active = mode == current)
+    }
+
+    /** Spostamento tra i coefficienti e funzioni utili per scriverli. */
+    fun equationTools(): List<PadKey> = listOf(
+        PadKey(
+            "", PadAction.Equation(EquationCommand.PREVIOUS_CELL), KeyStyle.Function,
+            s(R.string.previous_coefficient), icon = R.drawable.ic_chevron_left,
+        ),
+        PadKey(
+            "", PadAction.Equation(EquationCommand.NEXT_CELL), KeyStyle.Function,
+            s(R.string.next_coefficient), icon = R.drawable.ic_chevron_right,
+        ),
+        rootKey(inverse = false),
+        rootKey(inverse = true),
+        piKey(),
+    )
+
+    /** Tastierino della schermata equazioni: AC svuota la cella, "=" risolve. */
+    fun equationMain(decimalSeparator: Char): List<List<PadKey>> = listOf(
+        listOf(
+            PadKey(
+                "AC", input(CalcKey.Clear), KeyStyle.Clear, s(R.string.clear_coefficient),
+                longPressAction = PadAction.Equation(EquationCommand.CLEAR_CELLS),
+            ),
+            PadKey("( )", input(CalcKey.Parentheses), KeyStyle.Operator, s(R.string.key_parentheses)),
+            PadKey("xʸ", input(CalcKey.Operator('^')), KeyStyle.Operator, s(R.string.key_power)),
+            op("÷", '/', R.string.key_divide),
+        ),
+        listOf(digit('7'), digit('8'), digit('9'), op("×", '*', R.string.key_multiply)),
+        listOf(digit('4'), digit('5'), digit('6'), op("−", '-', R.string.key_minus)),
+        listOf(digit('1'), digit('2'), digit('3'), op("+", '+', R.string.key_plus)),
+        listOf(
+            digit('0'),
+            PadKey(decimalSeparator.toString(), input(CalcKey.Decimal), KeyStyle.Number, s(R.string.key_decimal)),
+            PadKey(
+                "", input(CalcKey.Backspace), KeyStyle.Number, s(R.string.key_backspace),
+                icon = R.drawable.ic_backspace,
+            ),
+            PadKey("=", input(CalcKey.Equals), KeyStyle.Equals, s(R.string.solve)),
+        ),
     )
 
     private fun inverseKey(inverse: Boolean) = PadKey(

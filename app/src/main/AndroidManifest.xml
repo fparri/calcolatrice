@@ -19,6 +19,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".EquationActivity"
+            android:exported="false"
+            android:label="@string/equations" />
     </application>
 
 </manifest>

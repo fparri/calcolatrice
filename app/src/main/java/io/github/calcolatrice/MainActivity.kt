@@ -5,48 +5,46 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.Intent
 import android.content.SharedPreferences
-import android.content.res.ColorStateList
-import android.content.res.Configuration
-import android.graphics.Color
 import android.graphics.Typeface
-import android.graphics.drawable.Drawable
-import android.graphics.drawable.GradientDrawable
-import android.graphics.drawable.RippleDrawable
 import android.os.Build
 import android.os.Bundle
 import android.text.TextUtils
 import android.util.TypedValue
 import android.view.Gravity
-import android.view.HapticFeedbackConstants
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
-import android.view.WindowInsets
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import io.github.calcolatrice.engine.AngleUnit
-import io.github.calcolatrice.engine.CalcError
 import io.github.calcolatrice.engine.CalcKey
 import io.github.calcolatrice.engine.CalculatorSession
 import io.github.calcolatrice.engine.CalculatorState
 import io.github.calcolatrice.engine.DisplayFormatter
 import io.github.calcolatrice.engine.HistoryEntry
 import io.github.calcolatrice.engine.ResultFormatter
+import io.github.calcolatrice.ui.HardwareKeys
 import io.github.calcolatrice.ui.KeyButton
 import io.github.calcolatrice.ui.KeyFactory
+import io.github.calcolatrice.ui.KeyPad
 import io.github.calcolatrice.ui.PadAction
 import io.github.calcolatrice.ui.PadKey
 import io.github.calcolatrice.ui.Palette
+import io.github.calcolatrice.ui.dp
+import io.github.calcolatrice.ui.errorMessage
+import io.github.calcolatrice.ui.padForSystemBars
+import io.github.calcolatrice.ui.rippleDrawable
+import io.github.calcolatrice.ui.roundedDrawable
+import io.github.calcolatrice.ui.setupEdgeToEdge
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.DecimalFormatSymbols
-import kotlin.math.max
-import kotlin.math.roundToInt
 
 /**
  * Unica schermata dell'app, costruita solo con le View del sistema Android (nessuna libreria).
@@ -59,6 +57,7 @@ class MainActivity : Activity() {
     private lateinit var session: CalculatorSession
     private lateinit var palette: Palette
     private lateinit var keys: KeyFactory
+    private lateinit var pad: KeyPad
     private lateinit var formatter: DisplayFormatter
     private lateinit var plainFormatter: DisplayFormatter
     private var decimalSeparator = '.'
@@ -81,6 +80,7 @@ class MainActivity : Activity() {
         prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
         palette = Palette(this)
         keys = KeyFactory(this)
+        pad = KeyPad(this, palette, ::onAction)
         val symbols = DecimalFormatSymbols.getInstance(resources.configuration.locales[0])
         decimalSeparator = symbols.decimalSeparator
         formatter = DisplayFormatter(symbols.decimalSeparator, symbols.groupingSeparator)
@@ -118,12 +118,23 @@ class MainActivity : Activity() {
             }
             PadAction.ToggleScientific -> scientificExpanded = !scientificExpanded
             PadAction.ShowHistory -> showHistory()
+            PadAction.OpenEquations -> {
+                startActivity(Intent(this, EquationActivity::class.java))
+                return
+            }
+            // Azioni della schermata equazioni.
+            PadAction.Back, is PadAction.Equation, is PadAction.SetEquationMode -> Unit
         }
         render()
     }
 
     /** Tastiere fisiche: tablet, Chromebook, tastiere Bluetooth. */
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        if (event.isCtrlPressed || event.isMetaPressed) {
+            if (keyCode != KeyEvent.KEYCODE_C) return super.onKeyDown(keyCode, event)
+            copyResult()
+            return true
+        }
         val key = hardwareKey(keyCode, event) ?: return super.onKeyDown(keyCode, event)
         onAction(PadAction.Input(key))
         return true
@@ -133,17 +144,21 @@ class MainActivity : Activity() {
         KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> CalcKey.Equals
         KeyEvent.KEYCODE_DEL -> CalcKey.Backspace
         KeyEvent.KEYCODE_FORWARD_DEL, KeyEvent.KEYCODE_ESCAPE -> CalcKey.Clear
-        else -> when (val c = event.unicodeChar.toChar()) {
-            in '0'..'9' -> CalcKey.Digit(c)
-            '.', ',' -> CalcKey.Decimal
-            '+', '-', '*', '/', '^' -> CalcKey.Operator(c)
-            '%' -> CalcKey.Percent
-            '!' -> CalcKey.Factorial
-            '(' -> CalcKey.OpenParen
-            ')' -> CalcKey.CloseParen
-            '=' -> CalcKey.Equals
-            else -> null
+        else -> {
+            val c = event.unicodeChar.toChar()
+            HardwareKeys.basic(c) ?: scientificKey(c)
         }
+    }
+
+    private fun scientificKey(c: Char): CalcKey? = when (c) {
+        // Scorciatoie per le funzioni scientifiche (rispettano il tasto INV).
+        's', 'S' -> CalcKey.Function(if (session.inverse) "asin" else "sin")
+        'c', 'C' -> CalcKey.Function(if (session.inverse) "acos" else "cos")
+        't', 'T' -> CalcKey.Function(if (session.inverse) "atan" else "tan")
+        'l', 'L' -> if (session.inverse) CalcKey.ExpE else CalcKey.Function("ln")
+        'g', 'G' -> if (session.inverse) CalcKey.Exp10 else CalcKey.Function("log")
+        'e' -> CalcKey.Constant('e')
+        else -> null
     }
 
     private fun copyResult() {
@@ -222,34 +237,30 @@ class MainActivity : Activity() {
         if (landscape) {
             val bottom = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
             val panel = FrameLayout(this).apply {
-                background = rounded(palette.panel, dp(28).toFloat())
+                background = roundedDrawable(palette.panel, dp(28).toFloat())
                 setPadding(dp(6), dp(6), dp(6), dp(6))
             }
-            val (scientificGrid, buttons) = grid(
+            val (scientificGrid, buttons) = pad.grid(
                 keys.scientificLandscape(session.inverse, session.angleUnit), dp(4), 18f,
             )
             scientificButtons = buttons
             panel.addView(scientificGrid, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
             bottom.addView(panel, LinearLayout.LayoutParams(0, MATCH_PARENT, 3f))
             bottom.addView(View(this), LinearLayout.LayoutParams(dp(12), MATCH_PARENT))
-            val (mainGrid, _) = grid(keys.main(decimalSeparator), dp(6), 22f)
+            val (mainGrid, _) = pad.grid(keys.main(decimalSeparator), dp(6), 22f)
             mainGridView = mainGrid
             bottom.addView(mainGrid, LinearLayout.LayoutParams(0, MATCH_PARENT, 4f))
             column.addView(bottom, LinearLayout.LayoutParams(MATCH_PARENT, 0, 2.2f))
         } else {
             column.addView(buildScientificPanel(), LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
             column.addView(View(this), LinearLayout.LayoutParams(MATCH_PARENT, dp(12)))
-            val (mainGrid, _) = grid(keys.main(decimalSeparator), dp(8), 30f)
+            val (mainGrid, _) = pad.grid(keys.main(decimalSeparator), dp(8), 30f)
             mainGridView = mainGrid
             column.addView(mainGrid, LinearLayout.LayoutParams(MATCH_PARENT, 0, 2f))
         }
 
         // Edge-to-edge: il contenuto evita barre di sistema e notch.
-        root.setOnApplyWindowInsetsListener { view, insets ->
-            val bars = systemBarInsets(insets)
-            view.setPadding(bars[0] + dp(16), bars[1] + dp(8), bars[2] + dp(16), bars[3] + dp(8))
-            insets
-        }
+        root.padForSystemBars(dp(16), dp(8))
         return root
     }
 
@@ -264,14 +275,15 @@ class MainActivity : Activity() {
             typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(12), 0, dp(12), 0)
-            background = ripple(palette.onBackground, dp(20).toFloat())
+            background = rippleDrawable(palette.onBackground, dp(20).toFloat())
             isClickable = true
             isFocusable = true
             setOnClickListener { onAction(PadAction.ToggleAngle) }
         }
         bar.addView(angleView, LinearLayout.LayoutParams(WRAP_CONTENT, dp(40)))
         bar.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
-        bar.addView(createButton(keys.historyKey(), 16f), LinearLayout.LayoutParams(dp(48), dp(48)))
+        bar.addView(pad.button(keys.equationsKey(), 16f), LinearLayout.LayoutParams(dp(48), dp(48)))
+        bar.addView(pad.button(keys.historyKey(), 16f), LinearLayout.LayoutParams(dp(48), dp(48)))
         return bar
     }
 
@@ -321,15 +333,15 @@ class MainActivity : Activity() {
         val rows = keys.scientificPortrait(session.inverse, session.angleUnit)
         val panel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            background = rounded(palette.panel, dp(28).toFloat())
+            background = roundedDrawable(palette.panel, dp(28).toFloat())
             setPadding(dp(4), dp(4), dp(4), dp(4))
             layoutTransition = LayoutTransition()
         }
 
         val firstLine = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        val (firstRow, firstButtons) = keyRow(rows.first(), dp(4), 18f)
+        val (firstRow, firstButtons) = pad.row(rows.first(), dp(4), 18f)
         firstLine.addView(firstRow, LinearLayout.LayoutParams(0, dp(44), 1f))
-        val expand = createButton(keys.expandKey(scientificExpanded), 18f)
+        val expand = pad.button(keys.expandKey(scientificExpanded), 18f)
         expandButton = expand
         firstLine.addView(expand, LinearLayout.LayoutParams(dp(44), dp(44)).apply { marginStart = dp(4) })
         panel.addView(firstLine, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
@@ -337,7 +349,7 @@ class MainActivity : Activity() {
         val extra = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val extraButtons = rows.drop(1).map { row ->
             val line = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-            val (rowView, rowButtons) = keyRow(row, dp(4), 18f)
+            val (rowView, rowButtons) = pad.row(row, dp(4), 18f)
             line.addView(rowView, LinearLayout.LayoutParams(0, dp(44), 1f))
             line.addView(View(this), LinearLayout.LayoutParams(dp(48), 1))
             extra.addView(line, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(4) })
@@ -347,49 +359,6 @@ class MainActivity : Activity() {
         scientificExtraRows = extra
         scientificButtons = listOf(firstButtons) + extraButtons
         return panel
-    }
-
-    private fun grid(rows: List<List<PadKey>>, spacing: Int, textSp: Float): Pair<LinearLayout, List<List<KeyButton>>> {
-        val container = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        val buttons = rows.mapIndexed { index, row ->
-            val (rowView, rowButtons) = keyRow(row, spacing, textSp)
-            container.addView(
-                rowView,
-                LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f).apply { if (index > 0) topMargin = spacing },
-            )
-            rowButtons
-        }
-        return container to buttons
-    }
-
-    private fun keyRow(row: List<PadKey>, spacing: Int, textSp: Float): Pair<LinearLayout, List<KeyButton>> {
-        val line = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        val buttons = row.mapIndexed { index, key ->
-            createButton(key, textSp).also { button ->
-                line.addView(
-                    button,
-                    LinearLayout.LayoutParams(0, MATCH_PARENT, 1f).apply { if (index > 0) marginStart = spacing },
-                )
-            }
-        }
-        return line to buttons
-    }
-
-    private fun createButton(key: PadKey, textSp: Float): KeyButton {
-        val button = KeyButton(this)
-        button.setTextSizeSp(textSp)
-        button.setOnClickListener {
-            button.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-            button.key?.let { onAction(it.action) }
-        }
-        button.setOnLongClickListener {
-            val action = button.key?.longPressAction ?: return@setOnLongClickListener false
-            button.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-            onAction(action)
-            true
-        }
-        button.bind(key, palette)
-        return button
     }
 
     // ---------------------------------------------------------------- cronologia
@@ -430,7 +399,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.END
             setPadding(dp(24), dp(12), dp(24), dp(12))
-            background = ripple(palette.onBackground, 0f)
+            background = rippleDrawable(palette.onBackground, 0f)
             isClickable = true
             isFocusable = true
             setOnClickListener {
@@ -496,66 +465,6 @@ class MainActivity : Activity() {
     }
 
     // ---------------------------------------------------------------- utilità
-
-    @Suppress("DEPRECATION")
-    private fun setupEdgeToEdge() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            window.setDecorFitsSystemWindows(false)
-        } else {
-            val night = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
-                Configuration.UI_MODE_NIGHT_YES
-            var flags = View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
-                View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
-                View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-            if (!night) {
-                flags = flags or View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
-            }
-            window.decorView.systemUiVisibility = flags
-        }
-    }
-
-    /** Spazio occupato da barre di sistema e notch: sinistra, sopra, destra, sotto. */
-    @Suppress("DEPRECATION")
-    private fun systemBarInsets(insets: WindowInsets): IntArray {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            val i = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
-            return intArrayOf(i.left, i.top, i.right, i.bottom)
-        }
-        val result = intArrayOf(
-            insets.systemWindowInsetLeft,
-            insets.systemWindowInsetTop,
-            insets.systemWindowInsetRight,
-            insets.systemWindowInsetBottom,
-        )
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            insets.displayCutout?.let { cutout ->
-                result[0] = max(result[0], cutout.safeInsetLeft)
-                result[1] = max(result[1], cutout.safeInsetTop)
-                result[2] = max(result[2], cutout.safeInsetRight)
-                result[3] = max(result[3], cutout.safeInsetBottom)
-            }
-        }
-        return result
-    }
-
-    private fun rounded(color: Int, radius: Float) = GradientDrawable().apply {
-        setColor(color)
-        cornerRadius = radius
-    }
-
-    private fun ripple(color: Int, radius: Float): Drawable {
-        val rippleColor = Color.argb(40, Color.red(color), Color.green(color), Color.blue(color))
-        return RippleDrawable(ColorStateList.valueOf(rippleColor), null, rounded(Color.WHITE, radius))
-    }
-
-    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).roundToInt()
-
-    private fun errorMessage(error: CalcError): Int = when (error) {
-        CalcError.DIVISION_BY_ZERO -> R.string.error_division_by_zero
-        CalcError.UNDEFINED -> R.string.error_undefined
-        CalcError.OVERFLOW -> R.string.error_overflow
-        CalcError.SYNTAX -> R.string.error_syntax
-    }
 
     private companion object {
         const val PREFS_NAME = "calculator"

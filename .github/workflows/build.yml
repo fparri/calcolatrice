@@ -14,21 +14,22 @@ on:
     tags: ["v*"]
   workflow_dispatch:
 
+# Permessi minimi: solo il job "release" (eseguito per i tag) può scrivere sul repository.
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  VERSION_CODE: ${{ github.run_number }}
+  VERSION_NAME: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('1.0.{0}', github.run_number) }}
+
 jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-
-    env:
-      VERSION_CODE: ${{ github.run_number }}
-      VERSION_NAME: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('1.0.{0}', github.run_number) }}
 
     steps:
       - name: Checkout
@@ -148,16 +149,31 @@ jobs:
           path: calcolatrice-${{ env.VERSION_NAME }}.apk
           if-no-files-found: error
 
-      - name: Pubblica la Release su GitHub
-        if: startsWith(github.ref, 'refs/tags/v')
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create "$GITHUB_REF_NAME" \
-            "calcolatrice-${VERSION_NAME}.apk" \
-            --title "Calcolatrice Lite $GITHUB_REF_NAME" \
-            --generate-notes
-
       - name: Elimina il keystore
         if: always()
         run: rm -f "$RUNNER_TEMP/release.p12"
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+
+    steps:
+      - name: Scarica l'APK firmato
+        uses: actions/download-artifact@v8
+        with:
+          name: calcolatrice-lite-${{ env.VERSION_NAME }}-SIGNED
+
+      - name: Pubblica la Release su GitHub
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create "$GITHUB_REF_NAME" \
+            "calcolatrice-${VERSION_NAME}.apk" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Calcolatrice Lite $GITHUB_REF_NAME" \
+            --generate-notes

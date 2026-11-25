@@ -130,4 +130,51 @@ class CalculatorEditorTest {
         val afterNumber = type(*digits("2")).state
         assertEquals("2*7", CalculatorEditor.insertValue(afterNumber, "7").expression)
     }
+
+    @Test
+    fun negativeAnsFollowedByPostfix() {
+        val minusFive = type(*digits("0-5"), CalcKey.Equals).state
+        val squared = type(CalcKey.Square, start = minusFive)
+        assertEquals("(-5)^2", ExpressionText.expandAns(squared.state.expression, minusFive.ans!!))
+        assertEquals("(−5)^2", DisplayFormatter().format(squared.state.expression, squared.state.ans))
+        assertEquals("25", CalculatorEditor.preview(squared.state, AngleUnit.DEGREES)?.toPlainString())
+        val done = type(CalcKey.Equals, start = squared.state)
+        assertEquals(CompletedCalculation("(-5)^2", "25"), done.completed)
+        // Da solo o seguito da un operatore il numero resta senza parentesi.
+        assertEquals("-5+1", ExpressionText.expandAns("@+1", minusFive.ans!!))
+        assertEquals("-5", ExpressionText.expandAns("@", minusFive.ans!!))
+    }
+
+    @Test
+    fun negativeHistoryValueOnEmptyDisplay() {
+        val inserted = CalculatorEditor.insertValue(CalculatorState(), "-5")
+        assertEquals("@", inserted.expression)
+        assertEquals("-5", inserted.ans?.toPlainString())
+        val squared = type(CalcKey.Square, CalcKey.Equals, start = inserted)
+        assertEquals("25", squared.state.ans?.toPlainString())
+        // Una cifra digitata subito dopo sostituisce il valore, come dopo "=".
+        assertEquals("7", type(CalcKey.Digit('7'), start = inserted).state.expression)
+    }
+
+    @Test
+    fun scientificNotationHistoryValueStaysAtomic() {
+        val base = type(*digits("2+")).state
+        val inserted = CalculatorEditor.insertValue(base, "1.5E20")
+        assertEquals("2+(1.5E20)", inserted.expression)
+        assertEquals("2+(1.5E20)*3", type(CalcKey.Digit('3'), start = inserted).state.expression)
+    }
+
+    @Test
+    fun backspaceNeverLeavesEmptyExponent() {
+        val small = CalculatorState(expression = "@", ans = java.math.BigDecimal("2.5E-10"), justEvaluated = true)
+        val one = type(CalcKey.Backspace, start = small).state
+        assertEquals("2.5E-1", one.expression)
+        val two = type(CalcKey.Backspace, start = one).state
+        assertEquals("2.5", two.expression)
+        val plusOne = type(CalcKey.Operator('+'), CalcKey.Digit('1'), start = two).state
+        assertEquals("2.5+1", plusOne.expression)
+        val big = CalculatorState(expression = "@", ans = java.math.BigDecimal("3E20"), justEvaluated = true)
+        assertEquals("3E2", type(CalcKey.Backspace, start = big).state.expression)
+        assertEquals("3", type(CalcKey.Backspace, CalcKey.Backspace, start = big).state.expression)
+    }
 }

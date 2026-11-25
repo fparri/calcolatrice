@@ -45,4 +45,28 @@
     <string name="key_exp_e">e elevato a</string>
     <string name="key_exp_10">dieci elevato a</string>
     <string name="close">Chiudi</string>
+
+    <!-- Equazioni e sistemi -->
+    <string name="equations">Equazioni e sistemi</string>
+    <string name="back">Indietro</string>
+    <string name="mode_system_2">Sistema 2×2</string>
+    <string name="mode_system_3">Sistema 3×3</string>
+    <string name="mode_quadratic">2° grado</string>
+    <string name="mode_system_2_description">Sistema di due equazioni in due incognite</string>
+    <string name="mode_system_3_description">Sistema di tre equazioni in tre incognite</string>
+    <string name="mode_quadratic_description">Equazione di secondo grado</string>
+    <string name="show_fractions">Mostra i risultati come frazioni</string>
+    <string name="previous_coefficient">Coefficiente precedente</string>
+    <string name="next_coefficient">Coefficiente successivo</string>
+    <string name="clear_coefficient">Cancella coefficiente. Tieni premuto per cancellare tutto</string>
+    <string name="solve">Risolvi</string>
+    <string name="solve_hint">Inserisci i coefficienti e premi =</string>
+    <string name="cell_description">Equazione %1$d, coefficiente %2$s: %3$s</string>
+    <string name="no_solution">Nessuna soluzione</string>
+    <string name="infinite_solutions">Infinite soluzioni</string>
+    <string name="no_real_solution">Nessuna soluzione reale</string>
+    <string name="double_root">Soluzione doppia</string>
+    <string name="linear_equation">a = 0: equazione di primo grado</string>
+    <string name="vertex_minimum">Minimo: x = %1$s; y = %2$s</string>
+    <string name="vertex_maximum">Massimo: x = %1$s; y = %2$s</string>
 </resources>

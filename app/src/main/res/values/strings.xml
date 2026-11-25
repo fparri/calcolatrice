@@ -48,4 +48,32 @@
     <string name="key_exp_e">e to the power of</string>
     <string name="key_exp_10">ten to the power of</string>
     <string name="close">Close</string>
+
+    <!-- Equazioni e sistemi -->
+    <string name="equations">Equations and systems</string>
+    <string name="back">Back</string>
+    <string name="mode_system_2">2×2 system</string>
+    <string name="mode_system_3">3×3 system</string>
+    <string name="mode_quadratic">Quadratic</string>
+    <string name="mode_system_2_description">System of two equations in two unknowns</string>
+    <string name="mode_system_3_description">System of three equations in three unknowns</string>
+    <string name="mode_quadratic_description">Quadratic equation</string>
+    <string name="formula_system_2" translatable="false">ax + by = c</string>
+    <string name="formula_system_3" translatable="false">ax + by + cz = d</string>
+    <string name="formula_quadratic" translatable="false">ax² + bx + c = 0</string>
+    <string name="fraction_short" translatable="false">a/b</string>
+    <string name="show_fractions">Show results as fractions</string>
+    <string name="previous_coefficient">Previous coefficient</string>
+    <string name="next_coefficient">Next coefficient</string>
+    <string name="clear_coefficient">Clear coefficient. Long press to clear all</string>
+    <string name="solve">Solve</string>
+    <string name="solve_hint">Enter the coefficients and press =</string>
+    <string name="cell_description">Equation %1$d, coefficient %2$s: %3$s</string>
+    <string name="no_solution">No solution</string>
+    <string name="infinite_solutions">Infinitely many solutions</string>
+    <string name="no_real_solution">No real solutions</string>
+    <string name="double_root">Double root</string>
+    <string name="linear_equation">a = 0: linear equation</string>
+    <string name="vertex_minimum">Minimum: x = %1$s; y = %2$s</string>
+    <string name="vertex_maximum">Maximum: x = %1$s; y = %2$s</string>
 </resources>

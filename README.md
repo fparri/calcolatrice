@@ -1,142 +1,124 @@
 # Calcolatrice
 
-Calcolatrice scientifica per Android scritta in **Kotlin**, **senza librerie**: solo le API di sistema di Android
-(niente Jetpack Compose, AndroidX o Material Components). L'APK di **release**, ottimizzato con R8, viene
-compilato automaticamente da **GitHub Actions** a ogni push ed è molto leggero.
+Una calcolatrice scientifica per Android, leggera e senza pubblicità. Non chiede nessun permesso e
+non si collega a Internet: i tuoi calcoli restano sul telefono.
 
-## Funzionalità
+Funziona su **Android 8.0 o successivo**, su telefoni, tablet e Chromebook.
 
-- Operazioni di base, percentuale, parentesi "intelligenti" (un solo tasto apre e chiude)
-- Funzioni scientifiche: sin, cos, tan e inverse, ln, log, eˣ, 10ˣ, √, x², xʸ, x!, π, e, 1/x
-- Gradi e radianti, con valori esatti per gli angoli notevoli (sin 180° = 0, tan 90° = errore)
-- Calcolo a 34 cifre di precisione con numeri decimali esatti (0,1 + 0,2 = 0,3)
-- Anteprima del risultato mentre scrivi; dopo "=" puoi continuare dal risultato
-- Cronologia persistente: tocca un calcolo per riusarne il risultato
-- Pressione prolungata sul display: copia il risultato; pressione prolungata su ⌫: cancella tutto
-- Separatori decimali e delle migliaia secondo la lingua del telefono (1.234,5 in italiano)
-- Supporto per tastiere fisiche (tablet, Chromebook, tastiere Bluetooth)
+## Installazione
 
-## Standard Android adottati (senza librerie)
+1. Apri la pagina **Releases** di questo repository e scarica il file `calcolatrice-….apk`
+   dell'ultima versione.
+2. Apri il file sul telefono. Se Android lo chiede, consenti l'installazione di app da questa fonte.
+3. Per aggiornare, scarica la nuova versione e installala sopra quella vecchia: la cronologia viene conservata.
 
-| Area | Come |
+## Cosa sa fare
+
+- **Operazioni di base**, parentesi e percentuali, con il risultato che appare in anteprima mentre scrivi.
+- **Funzioni scientifiche:** sin, cos, tan e le loro inverse, ln, log, eˣ, 10ˣ, √, x², xʸ, x!, 1/x, π ed e.
+- **Gradi e radianti**, con valori esatti per gli angoli notevoli (sin 180° = 0; tan 90° non è definita).
+- **Equazioni e sistemi**, come sulle calcolatrici scientifiche: sistemi lineari a 2 e 3 incognite ed
+  equazioni di secondo grado, con risultati in frazione o in decimale.
+- **Conti senza errori di arrotondamento** per le operazioni di base: 0,1 + 0,2 fa esattamente 0,3.
+- **Cronologia** degli ultimi 100 calcoli, conservata anche quando chiudi l'app.
+- **Numeri scritti come nella tua lingua** (1.234,5 in italiano, 1,234.5 in inglese).
+- **Tema chiaro e scuro** automatici e, da Android 12, colori abbinati al tuo sfondo.
+- **Italiano e inglese**. Da Android 13 puoi scegliere la lingua solo per questa app dalle impostazioni.
+- **Accessibile con TalkBack:** ogni tasto ha una descrizione e il risultato viene letto ad alta voce.
+
+## Come si usa
+
+| Per… | Fai così |
 |---|---|
-| Colori | Colori dinamici Material You da Android 12 (colori di sistema `system_accent*`/`system_neutral*`), tema chiaro/scuro automatico |
-| Schermo | Edge-to-edge con barre trasparenti, gestione di notch e barre di sistema, gesto Indietro predittivo |
-| Tasti | View personalizzata: forma a pillola animata alla pressione, ripple, vibrazione, testo che si adatta |
-| Layout adattivo | Verticale con pannello scientifico a scomparsa; orizzontale e tablet con tutti i tasti |
-| Icona | Icona adattiva con versione monocromatica per le icone a tema (Android 13+) |
-| Lingue | Italiano e inglese, con scelta della lingua per singola app (Android 13+) |
-| Accessibilità | Descrizioni per TalkBack su ogni tasto, risultato annunciato, testo scalabile |
-| Stato | Espressione salvata alla rotazione e se Android chiude l'app; cronologia salvata tra gli avvii |
-| Build | AGP 9 con Kotlin integrato, R8 con riduzione di codice e risorse, test unitari in CI |
+| Vedere le funzioni scientifiche | In verticale tocca la freccia accanto alla prima riga di funzioni. Gira il telefono per averle tutte insieme al tastierino. |
+| Usare le funzioni inverse (sin⁻¹, eˣ, x²…) | Tocca **INV**. |
+| Passare da gradi a radianti | Tocca **DEG/RAD**, oppure la scritta in alto a sinistra. |
+| Aprire e chiudere le parentesi | Il tasto **( )** capisce da solo se aprire o chiudere. Le parentesi lasciate aperte vengono chiuse al momento del calcolo. |
+| Continuare dal risultato | Dopo **=** premi un operatore: il calcolo riparte dal risultato. Se digiti un numero, ne inizi uno nuovo. |
+| Riusare un calcolo precedente | Tocca l'icona della cronologia in alto a destra, poi il calcolo che ti interessa. |
+| Copiare il risultato | Tieni premuto sul display. |
+| Cancellare tutto | Tocca **AC**, oppure tieni premuto ⌫. |
 
-Unica dipendenza: la libreria standard di Kotlin, che fa parte del linguaggio; R8 ne tiene solo le
-poche funzioni usate. Versioni: Android Gradle Plugin 9.3.3, Gradle 9.5.0, `compileSdk`/`targetSdk` 37,
-`minSdk` 26 (Android 8.0 o successivo).
+### Percentuali
 
-## 1. Caricare il progetto su GitHub
+Il tasto **%** funziona come sulle calcolatrici tascabili:
 
-1. Crea un nuovo repository su GitHub (può essere privato).
-2. Carica tutti i file di questa cartella, mantenendo la struttura delle sottocartelle.
-   - **Da terminale** (consigliato):
-     ```bash
-     cd Calcolatrice
-     git init
-     git add .
-     git commit -m "Prima versione"
-     git branch -M main
-     git remote add origin https://github.com/TUO-UTENTE/TUO-REPO.git
-     git push -u origin main
-     ```
-   - **Dal sito di GitHub** ("Add file" → "Upload files"): trascina il *contenuto* della cartella.
-     Attenzione alla cartella nascosta `.github` (contiene il workflow) e al file `.gitignore`:
-     su Mac premi `Cmd + Shift + .` nel Finder per vederli. Se la cartella `.github` non viene caricata,
-     crea il file da GitHub con "Add file" → "Create new file", come nome scrivi
-     `.github/workflows/build.yml` e incolla il contenuto del file.
+- `200 + 10%` = **220** (aggiunge il 10% di 200)
+- `200 − 10%` = **180** (toglie il 10% di 200)
+- `50 × 10%` = **5** (il 10% di 50)
+- `10%` da solo = **0,1**
 
-## 2. Scaricare l'APK
+### Radice quadrata
 
-1. Apri il repository → tab **Actions** → clicca sull'ultima esecuzione di **Build APK**.
-2. Quando la compilazione è finita (circa 3-5 minuti), in fondo alla pagina,
-   nella sezione **Artifacts**, scarica `calcolatrice-…`.
-3. Estrai lo zip e copia il file `.apk` sul telefono. Aprilo e consenti l'installazione da fonti sconosciute
-   quando Android lo chiede.
+**√** si applica al numero o alla parentesi che la segue: `√9 + 16` fa 3 + 16 = 19. Per la radice di
+un'espressione usa le parentesi: `√(9 + 16)` = 5.
 
-La compilazione riparte da sola a ogni modifica caricata, **su qualunque branch**. Puoi avviarla anche a mano
-da Actions → Build APK → **Run workflow** (scegliendo il branch che contiene il file del workflow).
+### Precisione
 
-> **Firma e aggiornamenti:** senza configurare nulla, l'APK è firmato con una chiave di debug che GitHub
-> conserva nella sua cache, così le nuove versioni si installano sopra le vecchie. La cache però scade se non
-> compili per 7 giorni: in quel caso la chiave cambia e dovrai disinstallare l'app una volta. Per una chiave
-> definitiva (necessaria anche per Google Play) configura la firma di release (punto 3).
+I risultati sono mostrati con un massimo di 15 cifre significative. Oltre questo limite, o per numeri
+molto piccoli, si passa alla notazione scientifica (per esempio `1,5E20` significa 1,5 × 10²⁰).
+La calcolatrice gestisce numeri fino a 10⁹⁹⁹⁹.
 
-## 3. (Facoltativo) Firma di release
+### Messaggi di errore
 
-Serve una volta sola e permette di installare gli aggiornamenti sopra la versione precedente.
+| Messaggio | Significato |
+|---|---|
+| Impossibile dividere per zero | Hai diviso per zero, per esempio `5 ÷ 0`. |
+| Risultato non definito | L'operazione non ha un risultato reale, per esempio `√−4`, `ln 0` o `tan 90°`. |
+| Numero troppo grande | Il risultato supera 10⁹⁹⁹⁹, per esempio `5000!`. |
+| Espressione non valida | Manca qualcosa, per esempio un numero dopo un operatore. |
 
-1. **Crea il keystore** sul tuo computer (serve Java; `keytool` è incluso nel JDK):
-   ```bash
-   keytool -genkeypair -v -keystore calcolatrice.jks -alias calcolatrice \
-     -keyalg RSA -keysize 4096 -validity 10000
-   ```
-   Ti chiederà una password e alcuni dati (nome, città…). **Conserva il file e la password in un posto
-   sicuro:** se li perdi, non potrai più pubblicare aggiornamenti della stessa app.
+## Equazioni e sistemi
 
-2. **Converti il keystore in testo** (Base64):
-   - macOS / Linux: `base64 -i calcolatrice.jks | tr -d '\n' > keystore.txt`
-   - Windows (PowerShell): `[Convert]::ToBase64String([IO.File]::ReadAllBytes("calcolatrice.jks")) > keystore.txt`
+Tocca l'icona **x =** in alto per aprire la schermata delle equazioni.
 
-3. **Aggiungi i Secrets** su GitHub: repository → **Settings** → **Secrets and variables** → **Actions** →
-   **New repository secret**. Creane quattro:
+1. Scegli il tipo di problema: **Sistema 2×2**, **Sistema 3×3** o **2° grado**. In alto vedi la forma
+   dell'equazione (per esempio `ax + by = c`) e le lettere sopra la tabella ti dicono dove va ogni coefficiente.
+2. Scrivi i coefficienti. Tocca una casella per selezionarla, oppure passa alla precedente o alla
+   successiva con **◀** e **▶**. Una casella vuota vale 0. Puoi scrivere anche frazioni ed espressioni,
+   come `1 ÷ 3`, `−√2` o `2π`.
+3. Premi **=** per risolvere.
 
-   | Nome | Valore |
-   |---|---|
-   | `SIGNING_KEYSTORE_BASE64` | il contenuto di `keystore.txt` |
-   | `SIGNING_STORE_PASSWORD` | la password del keystore |
-   | `SIGNING_KEY_ALIAS` | `calcolatrice` (l'alias usato nel comando) |
-   | `SIGNING_KEY_PASSWORD` | la password della chiave (di solito la stessa) |
+| Problema | Cosa ottieni |
+|---|---|
+| Sistema 2×2 o 3×3 | I valori di x, y (e z), oppure "Nessuna soluzione" o "Infinite soluzioni". |
+| 2° grado, due soluzioni reali | x₁ e x₂, dalla più grande alla più piccola. |
+| 2° grado, Δ = 0 | La soluzione doppia. |
+| 2° grado, Δ < 0 | Le due soluzioni complesse, nella forma `a + bi` e `a − bi`. |
+| 2° grado con a = 0 | La soluzione dell'equazione di primo grado che resta. |
 
-4. Da qui in poi ogni APK viene firmato con la tua chiave. La prima volta disinstalla la versione firmata con
-   la chiave di debug: Android non accetta un aggiornamento firmato con una chiave diversa.
+Per le equazioni di secondo grado viene mostrato anche il vertice della parabola, cioè il punto di
+minimo (se a > 0) o di massimo (se a < 0).
 
-5. **Pubblicare una versione** (funziona anche senza Secrets): crea un tag che inizia con `v`, per esempio
-   ```bash
-   git tag v1.0.0
-   git push origin v1.0.0
-   ```
-   Il workflow crea una **Release** su GitHub con l'APK allegato, scaricabile direttamente dal telefono.
+**Frazioni o decimali:** il tasto **a/b** in alto a destra passa dai risultati in frazione (`x = −3/4`)
+a quelli decimali (`x = −0,75`) e viceversa. Se un risultato non è una frazione semplice, per esempio √2,
+resta in forma decimale.
 
-Non caricare mai il file `.jks` o `keystore.txt` nel repository (il `.gitignore` esclude già i keystore).
+Altre cose utili:
 
-## Personalizzare
+- **AC** cancella la casella selezionata; tenendolo premuto cancelli tutta la tabella.
+- I coefficienti restano salvati anche se chiudi la schermata o l'app.
+- Tieni premuto sui risultati per copiarli.
+- Con una tastiera fisica: **Tab** passa alla casella successiva (**Maiusc + Tab** alla precedente) e **Invio** risolve.
 
-- **Nome del pacchetto:** in `app/build.gradle.kts` cambia `applicationId` (per esempio `it.tuonome.calcolatrice`).
-  Va deciso prima di distribuire l'app: dispositivi e Play Store la riconoscono da questo nome.
-- **Nome dell'app:** `app/src/main/res/values-it/strings.xml` (italiano) e `values/strings.xml` (inglese).
-- **Colori:** `app/src/main/res/values*/colors.xml` (le cartelle `-v31` contengono i colori dinamici di Android 12+).
-- **Versioni degli strumenti di build:** `gradle/libs.versions.toml`.
+## Tastiera fisica
 
-## Struttura del progetto
+Con una tastiera collegata (Bluetooth, tablet, Chromebook) puoi scrivere direttamente nella calcolatrice:
 
-```
-.github/workflows/build.yml        Compilazione automatica su GitHub Actions
-gradle/libs.versions.toml          Versioni di plugin e librerie
-app/build.gradle.kts               Configurazione dell'app e della firma
-app/src/main/java/io/github/calcolatrice/
-├── MainActivity.kt                Schermata, layout, cronologia, salvataggio, edge-to-edge
-├── engine/                        Motore di calcolo (Kotlin puro, senza Android)
-│   ├── Evaluator.kt               Parser ed esecuzione delle espressioni
-│   ├── CalculatorEditor.kt        Regole di inserimento dei tasti
-│   ├── CalculatorSession.kt       Stato della calcolatrice e cronologia
-│   └── Formatting.kt              Formattazione di numeri e simboli
-└── ui/
-    ├── KeyButton.kt               Tasto disegnato a mano e colori del tema
-    └── Keys.kt                    Definizione dei tasti
-app/src/main/res/                  Testi (it/en), colori, icone, tema di sistema
-app/src/test/                      Test unitari del motore di calcolo
-```
+| Tasto | Funzione |
+|---|---|
+| `0`–`9`, `.` o `,` | cifre e virgola |
+| `+` `-` `*` `/` `^` | operazioni (anche `x` per ×, `:` per ÷) |
+| `%` `!` `(` `)` | percentuale, fattoriale, parentesi |
+| `Invio` o `=` | risultato |
+| `Backspace` | cancella l'ultimo carattere |
+| `Esc` o `Canc` | cancella tutto |
+| `s` `c` `t` | sin, cos, tan (con INV attivo: le inverse) |
+| `l` `g` | ln, log (con INV attivo: eˣ, 10ˣ) |
+| `r` `p` `e` | √, π, e |
+| `Ctrl + C` | copia il risultato |
 
-## Aprire in Android Studio (facoltativo)
+## Privacy
 
-File → Open → seleziona la cartella `Calcolatrice`. Android Studio scarica da solo Gradle e l'SDK
-necessari; puoi poi avviare l'app su un emulatore o su un telefono collegato via USB.
+L'app non richiede permessi, non usa Internet e non raccoglie dati. La cronologia è salvata solo sul
+telefono ed è inclusa nel backup di Android, se lo hai attivato.

@@ -51,14 +51,19 @@ data class Transition(val state: CalculatorState, val completed: CompletedCalcul
 object ExpressionText {
     private val FUNCTION_TOKENS = Tokenizer.FUNCTIONS.map { "$it(" }
 
-    /** Sostituisce `@` con il valore di Ans (tra parentesi se negativo e non in prima posizione). */
+    /**
+     * Sostituisce `@` con il valore di Ans. Un valore negativo va tra parentesi se non è in prima posizione
+     * o se è seguito da `^ ! %`: altrimenti `−5^2` si leggerebbe −(5²) invece di (−5)².
+     */
     fun expandAns(expression: String, ans: BigDecimal): String {
         if ('@' !in expression) return expression
         val text = ResultFormatter.toInternal(ans)
         val out = StringBuilder()
         expression.forEachIndexed { index, c ->
             if (c == '@') {
-                if (text.startsWith('-') && index > 0) out.append('(').append(text).append(')') else out.append(text)
+                val next = expression.getOrNull(index + 1)
+                val wrap = text.startsWith('-') && (index > 0 || (next != null && next in "^!%"))
+                if (wrap) out.append('(').append(text).append(')') else out.append(text)
             } else {
                 out.append(c)
             }
@@ -132,11 +137,15 @@ object CalculatorEditor {
     /** Inserisce un valore (per esempio dalla cronologia) nella posizione corrente. */
     fun insertValue(state: CalculatorState, value: String): CalculatorState {
         val s = state.expression
-        val text = when {
-            state.justEvaluated || s.isEmpty() -> value
-            value.startsWith('-') -> "($value)"
-            else -> value
+        if (state.justEvaluated || s.isEmpty()) {
+            // Come dopo "=": il valore diventa Ans, quindi x², ! e % si applicano al numero intero
+            // (anche negativo) e una cifra digitata subito dopo lo sostituisce.
+            val number = value.toBigDecimalOrNull()
+            if (number != null) return CalculatorState(expression = "@", ans = number, justEvaluated = true)
         }
+        // A metà espressione il valore resta un blocco unico: negativi e notazione E vanno tra parentesi,
+        // altrimenti x² agirebbe senza il segno o una cifra digitata dopo finirebbe nell'esponente.
+        val text = if (value.startsWith('-') || 'E' in value) "($value)" else value
         val newExpression = when {
             state.justEvaluated || s.isEmpty() -> text
             ExpressionText.endsWithOperand(s) -> "$s*$text"
@@ -241,6 +250,13 @@ object CalculatorEditor {
         // Dopo "=" si può modificare il risultato: Ans diventa il suo testo.
         if (s.endsWith('@') && state.ans != null) s = ExpressionText.expandAns(s, state.ans)
         val function = ExpressionText.endsWithFunctionToken(s)
-        return if (function != null) s.dropLast(function.length) else s.dropLast(1)
+        s = if (function != null) s.dropLast(function.length) else s.dropLast(1)
+        // Un esponente rimasto vuoto ("1.5E-" o "1.5E") sparisce insieme alla E, così la cifra
+        // o l'operatore successivo non finiscono nell'esponente.
+        return when {
+            s.endsWith("E-") -> s.dropLast(2)
+            s.endsWith('E') -> s.dropLast(1)
+            else -> s
+        }
     }
 }
