@@ -1,7 +1,7 @@
 # Compila e firma l'APK Release di Calcolatrice Lite.
 #
 # - Utilizza esclusivamente la chiave privata permanente.
-# - Esegue i test unitari.
+# - Esegue i test unitari e Android Lint (il report resta tra gli artifact).
 # - Verifica la firma digitale e il certificato SHA-256.
 # - Genera automaticamente il numero di versione.
 # - Un tag "v*" crea anche una Release con l'APK allegato.
@@ -70,6 +70,19 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew testDebugUnitTest
+
+      # Controllo statico di Android (accessibilità, traduzioni, API usate sulla versione
+      # sbagliata di Android...): non aggiunge dipendenze all'app. Gli errori fermano la build.
+      - name: Android Lint
+        run: ./gradlew lintRelease
+
+      - name: Carica il report di Lint
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: lint-report-${{ env.VERSION_NAME }}
+          path: app/build/reports/lint-results-release.html
+          if-no-files-found: ignore
 
       - name: Compila APK Release firmato
         env:

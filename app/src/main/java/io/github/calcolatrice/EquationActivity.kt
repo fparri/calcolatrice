@@ -4,11 +4,7 @@ import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.SharedPreferences
-import android.content.res.ColorStateList
 import android.graphics.Typeface
-import android.graphics.drawable.Drawable
-import android.graphics.drawable.GradientDrawable
-import android.graphics.drawable.RippleDrawable
 import android.os.Build
 import android.os.Bundle
 import android.text.TextUtils
@@ -24,6 +20,7 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import io.github.calcolatrice.engine.CalcKey
+import io.github.calcolatrice.engine.CubicSolution
 import io.github.calcolatrice.engine.DisplayFormatter
 import io.github.calcolatrice.engine.EquationMode
 import io.github.calcolatrice.engine.EquationOutcome
@@ -32,19 +29,22 @@ import io.github.calcolatrice.engine.LinearSolution
 import io.github.calcolatrice.engine.QuadraticSolution
 import io.github.calcolatrice.engine.SolutionFormatter
 import io.github.calcolatrice.engine.Vertex
-import io.github.calcolatrice.ui.EquationCommand
 import io.github.calcolatrice.ui.HardwareKeys
 import io.github.calcolatrice.ui.KeyButton
 import io.github.calcolatrice.ui.KeyFactory
 import io.github.calcolatrice.ui.KeyPad
 import io.github.calcolatrice.ui.PadAction
+import io.github.calcolatrice.ui.NamedValue
 import io.github.calcolatrice.ui.Palette
+import io.github.calcolatrice.ui.Settings
+import io.github.calcolatrice.ui.SheetCommand
+import io.github.calcolatrice.ui.cellBackground
 import io.github.calcolatrice.ui.dp
 import io.github.calcolatrice.ui.errorMessage
 import io.github.calcolatrice.ui.padForSystemBars
-import io.github.calcolatrice.ui.rippleColor
 import io.github.calcolatrice.ui.roundedDrawable
 import io.github.calcolatrice.ui.setupEdgeToEdge
+import io.github.calcolatrice.ui.showSaveToVariable
 import org.json.JSONArray
 import org.json.JSONObject
 import java.math.BigDecimal
@@ -58,6 +58,7 @@ import java.text.DecimalFormatSymbols
 class EquationActivity : Activity() {
 
     private lateinit var prefs: SharedPreferences
+    private lateinit var settings: Settings
     private lateinit var sheet: EquationSheet
     private lateinit var palette: Palette
     private lateinit var keys: KeyFactory
@@ -78,21 +79,33 @@ class EquationActivity : Activity() {
     private lateinit var resultView: TextView
     private lateinit var noteView: TextView
 
-    /** Testo dei risultati: messaggio, righe principali e nota (il vertice della parabola). */
-    private data class Description(val message: String?, val lines: List<String>, val note: String? = null)
+    /**
+     * Testo dei risultati: messaggio, righe principali, nota (il vertice della parabola)
+     * e i valori reali che si possono salvare in una variabile.
+     */
+    private data class Description(
+        val message: String?,
+        val lines: List<String>,
+        val note: String? = null,
+        val values: List<NamedValue> = emptyList(),
+    )
+
+    /** Valori dell'ultimo risultato mostrato, per "salva in una variabile". */
+    private var storable: List<NamedValue> = emptyList()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setupEdgeToEdge()
 
         prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        settings = Settings(this)
         palette = Palette(this)
         keys = KeyFactory(this)
         pad = KeyPad(this, palette, ::onAction)
         val symbols = DecimalFormatSymbols.getInstance(resources.configuration.locales[0])
         decimalSeparator = symbols.decimalSeparator
         display = DisplayFormatter(symbols.decimalSeparator, symbols.groupingSeparator)
-        solutions = SolutionFormatter(display)
+        solutions = SolutionFormatter(display, settings.numberFormat)
         asFraction = prefs.getBoolean(PREF_FRACTION, true)
 
         sheet = restoreSheet()
@@ -123,14 +136,15 @@ class EquationActivity : Activity() {
         when (action) {
             is PadAction.Input -> sheet.onKey(action.key)
             is PadAction.SetEquationMode -> sheet.setMode(action.mode)
-            is PadAction.Equation -> when (action.command) {
-                EquationCommand.NEXT_CELL -> sheet.next()
-                EquationCommand.PREVIOUS_CELL -> sheet.previous()
-                EquationCommand.CLEAR_CELLS -> sheet.clearAll()
-                EquationCommand.TOGGLE_FRACTION -> {
-                    asFraction = !asFraction
-                    prefs.edit().putBoolean(PREF_FRACTION, asFraction).apply()
-                }
+            is PadAction.Sheet -> when (action.command) {
+                SheetCommand.NEXT_CELL -> sheet.next()
+                SheetCommand.PREVIOUS_CELL -> sheet.previous()
+                SheetCommand.CLEAR_CELLS -> sheet.clearAll()
+                SheetCommand.DELETE_ROW -> Unit
+            }
+            PadAction.ToggleFraction -> {
+                asFraction = !asFraction
+                prefs.edit().putBoolean(PREF_FRACTION, asFraction).apply()
             }
             PadAction.Back -> {
                 finish()
@@ -149,8 +163,8 @@ class EquationActivity : Activity() {
             return true
         }
         val action = when (keyCode) {
-            KeyEvent.KEYCODE_TAB -> PadAction.Equation(
-                if (event.isShiftPressed) EquationCommand.PREVIOUS_CELL else EquationCommand.NEXT_CELL,
+            KeyEvent.KEYCODE_TAB -> PadAction.Sheet(
+                if (event.isShiftPressed) SheetCommand.PREVIOUS_CELL else SheetCommand.NEXT_CELL,
             )
             KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> PadAction.Input(CalcKey.Equals)
             KeyEvent.KEYCODE_DEL -> PadAction.Input(CalcKey.Backspace)
@@ -195,7 +209,7 @@ class EquationActivity : Activity() {
             val selected = index == sheet.selected
             cell.text = text
             cell.setTextColor(if (expression.isEmpty()) palette.onBackgroundVariant else palette.onBackground)
-            cell.background = cellBackground(selected, error = index == errorCell)
+            cell.background = cellBackground(palette, selected, error = index == errorCell)
             cell.isSelected = selected
             cell.contentDescription = getString(
                 R.string.cell_description,
@@ -213,6 +227,7 @@ class EquationActivity : Activity() {
         resultView.visibility = if (description.lines.isEmpty()) View.GONE else View.VISIBLE
         noteView.text = description.note.orEmpty()
         noteView.visibility = if (description.note == null) View.GONE else View.VISIBLE
+        storable = description.values
     }
 
     private fun describe(outcome: EquationOutcome?): Description = when (outcome) {
@@ -220,25 +235,20 @@ class EquationActivity : Activity() {
         is EquationOutcome.Error -> Description(getString(errorMessage(outcome.error)), emptyList())
         is EquationOutcome.System -> describeLinear(outcome.solution, listOf("x", "y", "z"))
         is EquationOutcome.Quadratic -> describeQuadratic(outcome.solution)
+        is EquationOutcome.Cubic -> describeCubic(outcome.solution)
     }
 
     private fun describeLinear(solution: LinearSolution, names: List<String>): Description = when (solution) {
-        is LinearSolution.Unique -> Description(null, solution.values.mapIndexed { i, v -> "${names[i]} = ${value(v)}" })
+        is LinearSolution.Unique -> named(solution.values.mapIndexed { i, v -> names[i] to v }, null)
         LinearSolution.None -> Description(getString(R.string.no_solution), emptyList())
         LinearSolution.Infinite -> Description(getString(R.string.infinite_solutions), emptyList())
     }
 
     private fun describeQuadratic(solution: QuadraticSolution): Description = when (solution) {
-        is QuadraticSolution.TwoReal -> Description(
-            null,
-            listOf("x₁ = ${value(solution.x1)}", "x₂ = ${value(solution.x2)}"),
-            vertex(solution.vertex),
-        )
-        is QuadraticSolution.DoubleRoot -> Description(
-            getString(R.string.double_root),
-            listOf("x = ${value(solution.x)}"),
-            vertex(solution.vertex),
-        )
+        is QuadraticSolution.TwoReal ->
+            named(listOf("x₁" to solution.x1, "x₂" to solution.x2), null, vertex(solution.vertex))
+        is QuadraticSolution.DoubleRoot ->
+            named(listOf("x" to solution.x), getString(R.string.double_root), vertex(solution.vertex))
         is QuadraticSolution.ComplexPair -> Description(
             getString(R.string.no_real_solution),
             listOf(
@@ -249,12 +259,41 @@ class EquationActivity : Activity() {
         )
         is QuadraticSolution.Linear -> {
             val linear = describeLinear(solution.solution, listOf("x"))
-            Description(
-                listOfNotNull(getString(R.string.linear_equation), linear.message).joinToString("\n"),
-                linear.lines,
-            )
+            linear.copy(message = listOfNotNull(getString(R.string.linear_equation), linear.message).joinToString("\n"))
         }
     }
+
+    private fun describeCubic(solution: CubicSolution): Description = when (solution) {
+        is CubicSolution.Quadratic -> {
+            val quadratic = describeQuadratic(solution.solution)
+            quadratic.copy(
+                message = listOfNotNull(getString(R.string.quadratic_equation), quadratic.message).joinToString("\n"),
+            )
+        }
+        is CubicSolution.Roots -> {
+            val complex = solution.complex
+            if (complex == null) {
+                named(solution.real.mapIndexed { i, x -> "x${SUBSCRIPTS[i]}" to x }, null)
+            } else {
+                val (re, im) = complex
+                val real = named(listOf("x₁" to solution.real[0]), null)
+                real.copy(
+                    lines = real.lines + listOf(
+                        "x₂ = " + solutions.complex(re, im, plus = true, asFraction = asFraction),
+                        "x₃ = " + solutions.complex(re, im, plus = false, asFraction = asFraction),
+                    ),
+                )
+            }
+        }
+    }
+
+    /** Righe "nome = valore", con i valori salvabili in una variabile. */
+    private fun named(values: List<Pair<String, BigDecimal>>, message: String?, note: String? = null) = Description(
+        message,
+        values.map { (name, x) -> "$name = ${value(x)}" },
+        note,
+        values.map { (name, x) -> NamedValue("$name = ${value(x)}", x) },
+    )
 
     private fun value(x: BigDecimal) = solutions.value(x, asFraction)
 
@@ -268,18 +307,7 @@ class EquationActivity : Activity() {
         EquationMode.SYSTEM_2 -> R.string.formula_system_2
         EquationMode.SYSTEM_3 -> R.string.formula_system_3
         EquationMode.QUADRATIC -> R.string.formula_quadratic
-    }
-
-    private fun cellBackground(selected: Boolean, error: Boolean): Drawable {
-        val shape = GradientDrawable().apply {
-            setColor(palette.panel)
-            cornerRadius = dp(12).toFloat()
-            when {
-                error -> setStroke(dp(2), palette.error)
-                selected -> setStroke(dp(2), palette.accent)
-            }
-        }
-        return RippleDrawable(ColorStateList.valueOf(rippleColor(palette.onBackground)), shape, null)
+        EquationMode.CUBIC -> R.string.formula_cubic
     }
 
     // ---------------------------------------------------------------- layout
@@ -293,7 +321,7 @@ class EquationActivity : Activity() {
 
         val editor = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         editor.addView(buildTopBar(), LinearLayout.LayoutParams(MATCH_PARENT, dp(48)))
-        val (modeRow, buttons) = pad.row(keys.equationModes(sheet.mode), dp(8), 15f)
+        val (modeRow, buttons) = pad.row(keys.equationModes(sheet.mode), dp(6), 14f)
         modeButtons = buttons
         editor.addView(modeRow, LinearLayout.LayoutParams(MATCH_PARENT, dp(40)).apply { topMargin = dp(4) })
         gridView = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -355,7 +383,8 @@ class EquationActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.END
             setPadding(dp(8), dp(8), dp(8), dp(8))
-            // Pressione prolungata: copia i risultati.
+            // Tocco: salva un risultato in una variabile; pressione prolungata: copia i risultati.
+            setOnClickListener { showSaveToVariable(storable, settings, this@EquationActivity.display) }
             setOnLongClickListener {
                 copyResults()
                 true
@@ -462,5 +491,6 @@ class EquationActivity : Activity() {
         const val PREF_FRACTION = "fractions"
         const val KEY_SELECTED = "selected"
         const val LETTERS = "abcd"
+        const val SUBSCRIPTS = "₁₂₃"
     }
 }

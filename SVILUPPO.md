@@ -16,19 +16,25 @@ Informazioni per chi mantiene il progetto. Il [README](README.md) è rivolto a c
 gradle/libs.versions.toml          Versioni di plugin e librerie
 app/build.gradle.kts               Configurazione dell'app e della firma
 app/src/main/java/io/github/calcolatrice/
-├── MainActivity.kt                Calcolatrice: layout, cronologia, salvataggio, tastiera fisica
+├── MainActivity.kt                Calcolatrice: display con cursore, menu, variabili, cronologia, salvataggio
 ├── EquationActivity.kt            Equazioni e sistemi: tabella dei coefficienti e risultati
+├── StatisticsActivity.kt          Statistica: tabella dei dati e risultati
 ├── engine/                        Motore di calcolo (Kotlin puro, senza Android)
-│   ├── Evaluator.kt               Tokenizer, parser ed esecuzione delle espressioni
-│   ├── CalculatorEditor.kt        Regole di inserimento dei tasti
-│   ├── CalculatorSession.kt       Stato della calcolatrice e cronologia
-│   ├── Formatting.kt              Formattazione di numeri e simboli
-│   ├── Equations.kt               Sistemi lineari, 2° grado, frazioni, testo dei risultati
-│   └── EquationSheet.kt           Stato della schermata equazioni (celle, selezione, risultato)
+│   ├── Evaluator.kt               Tokenizer, parser ed esecuzione delle espressioni, variabili
+│   ├── BigMath.kt                 exp, ln, sin/cos, atan, √ in BigDecimal a 50 cifre
+│   ├── CalculatorEditor.kt        Regole di inserimento dei tasti e cursore
+│   ├── CalculatorSession.kt       Stato della calcolatrice: cronologia, variabili, memoria, SOLVE
+│   ├── Solver.kt                  SOLVE: Newton smorzato, poi ricerca di un cambio di segno
+│   ├── Formatting.kt              Formati NORM/FIX/SCI/ENG, testo per lo schermo, apici, posizioni
+│   ├── Equations.kt               Sistemi lineari, 2° e 3° grado, frazioni, testo dei risultati
+│   ├── EquationSheet.kt           Stato della schermata equazioni (celle, selezione, risultato)
+│   └── Statistics.kt              Statistica a una variabile, regressione, stato della tabella
 └── ui/
     ├── KeyButton.kt               Tasto disegnato a mano e colori del tema
     ├── Keys.kt                    Definizione dei tasti e delle azioni
     ├── KeyPad.kt                  Costruzione di righe e griglie di tasti, tastiera fisica
+    ├── Settings.kt                Formato dei numeri e variabili, condivisi tra le schermate
+    ├── Dialogs.kt                 Dialoghi "salva in una variabile" e "formato dei numeri"
     └── ViewUtils.kt               Edge-to-edge, insets, sfondi e altre utilità condivise
 app/src/main/res/                  Testi (it/en), colori, icone, tema di sistema
 app/src/test/                      Test unitari del motore di calcolo
@@ -40,14 +46,25 @@ L'editor costruisce un testo che il parser valuta a ogni tasto per l'anteprima:
 
 - numeri con il punto decimale, eventualmente `1.5E-7`; operatori `+ - * / ^`; postfissi `!` e `%`
 - `π`, `e`, `@` (risultato precedente, a piena precisione), `√` prefisso, funzioni `sin(` `asin(` `ln(` `log(` ecc.
+- variabili `A B C D X Y M` (lettere maiuscole); manca la `E`, che indica l'esponente
 - la moltiplicazione implicita è sempre scritta esplicitamente dall'editor (`2π` → `2*π`)
+
+Il cursore (`CalculatorState.cursor`, null = in fondo) divide l'espressione in due: le regole
+dell'editor lavorano sul testo prima del cursore e quello dopo resta invariato. Quando il cursore non
+è in fondo l'espressione non contiene `@` (viene sostituito dal suo valore appena si sposta il cursore).
+`DisplayFormatter.layout` restituisce, oltre al testo, la posizione a schermo di ogni carattere interno:
+serve per disegnare il cursore e per spostarlo toccando il display.
 
 Regole di precedenza da tenere presenti: `-2^2 = -4`, `2^3^2 = 2^9`, `√` si applica solo all'operando
 che segue (`√9! = (√9)!`), e dopo `+`/`−` una percentuale semplice si riferisce al valore precedente
 (`200+10% = 220`).
 
-Le operazioni di base, le potenze intere e `√` usano `BigDecimal` a 34 cifre; trigonometria, logaritmi
-e potenze non intere passano per `double` e sono arrotondati a 15 cifre, la stessa precisione mostrata a schermo.
+Tutti i calcoli usano `BigDecimal` a 34 cifre. Le funzioni di `BigMath` lavorano a 50 cifre e
+arrotondano il risultato: π con la formula di Machin, eˣ dimezzando l'argomento (serie di Taylor e
+quadrati successivi), ln con passi di Halley su eˣ, seno e coseno riducendo l'angolo a [−π/4, π/4],
+arcotangente dimezzando l'angolo. Le potenze non intere sono `e^(y·ln x)`; `e^x` usa direttamente
+l'esponenziale. Residui come sin(π) ≈ 3·10⁻³⁴ (π stesso ha 34 cifre) vengono azzerati.
+I test in `PrecisionTest` confrontano i risultati con valori di riferimento calcolati a 40 cifre.
 
 ### Equazioni e sistemi
 
@@ -61,13 +78,47 @@ e potenze non intere passano per `double` e sono arrotondati a 15 cifre, la stes
 - **Frazioni** (`Fractions`): il risultato decimale viene riconosciuto con le frazioni continue, con
   denominatore fino a 1 000 000 e numeratore fino a 12 cifre; altrimenti resta decimale. Non ci sono
   forme esatte con radicali (`(1+√5)/2`): servirebbe un motore simbolico.
+- **Terzo grado** (`CubicEquation`): il discriminante è calcolato esatto; se è zero le radici multiple
+  si ottengono con formule esatte (così `(x−2)³` dà esattamente 2). Altrimenti una radice reale si trova
+  per bisezione entro il limite di Cauchy e Newton, e le altre due dall'equazione di secondo grado che
+  resta, rifinite con Newton sul polinomio originale.
 - **Coefficienti**: ogni cella è un'espressione modificata con `CalculatorEditor`, quindi segue le stesse
   regole della calcolatrice. Le celle sono salvate in `SharedPreferences` (file `equations`).
+
+### SOLVE
+
+`NumericSolver` cerca uno zero dell'espressione nella variabile X: prima il metodo di Newton con
+derivata numerica e passo smorzato (si dimezza finché |f| non diminuisce), poi, se non converge,
+cerca un cambio di segno allontanandosi dal valore iniziale e lo restringe alternando bisezione e
+secante. Un cambio di segno attraverso un polo (come 1/X) viene scartato controllando |f| alla fine.
+Se un valore più "pulito" (intero, o con meno cifre) va bene almeno quanto, si usa quello.
+
+### Statistica
+
+`Statistics` calcola media e deviazioni standard in due passaggi (scarti dalla media, più preciso di
+Σx² − n·x̄²) e i quartili come le calcolatrici: mediane delle due metà, esclusa la mediana se n è
+dispari. `StatisticsSheet` tiene una tabella per modalità, con una riga vuota finale per aggiungere
+dati (massimo 200 righe). I dati sono salvati nel file `statistics`.
+
+### Dati salvati
+
+| File `SharedPreferences` | Contenuto |
+|---|---|
+| `calculator` | calcolo in corso, cronologia, unità angolare, formato dei numeri, variabili, frazioni sì/no |
+| `equations` | coefficienti di ogni modalità, modalità scelta, frazioni sì/no |
+| `statistics` | dati di ogni modalità, modalità scelta |
+
+### Scorciatoie dell'icona
+
+`res/xml/shortcuts.xml` definisce le scorciatoie "Equazioni" e "Statistica". Aprono `MainActivity`
+(l'unica schermata esportata) con un'azione, e `MainActivity` passa alla schermata richiesta.
+**Se cambi `applicationId`, aggiorna anche `targetPackage` in `shortcuts.xml`.**
 
 ## Compilare in locale
 
 ```bash
 ./gradlew testDebugUnitTest   # test unitari
+./gradlew lintRelease         # controllo statico (report in app/build/reports/)
 ./gradlew assembleDebug       # APK di debug
 ./gradlew assembleRelease     # APK di release (firmato con la chiave di debug se non c'è un keystore)
 ```
@@ -82,8 +133,8 @@ Il workflow **Build APK** parte:
 - a ogni tag che inizia con `v` (per esempio `v1.2.0`): in questo caso crea anche una Release con l'APK allegato;
 - a mano, da Actions → Build APK → **Run workflow**.
 
-Esegue i test, compila l'APK di release, verifica che sia firmato con il certificato atteso e lo carica
-come artifact (`calcolatrice-lite-<versione>-SIGNED`). Il `versionCode` è il numero dell'esecuzione;
+Esegue i test e Android Lint (il report HTML resta tra gli artifact; gli errori fermano la build),
+compila l'APK di release, verifica che sia firmato con il certificato atteso e lo carica come artifact (`calcolatrice-lite-<versione>-SIGNED`). Il `versionCode` è il numero dell'esecuzione;
 il `versionName` è il nome del tag, oppure `1.0.<numero esecuzione>`.
 
 La firma usa **solo la chiave permanente**: se i Secrets non sono configurati, il workflow si ferma
@@ -125,6 +176,6 @@ git push origin v1.2.0
 
 ## Personalizzare
 
-- **Nome del pacchetto:** `applicationId` in `app/build.gradle.kts`. Va deciso prima di distribuire l'app.
+- **Nome del pacchetto:** `applicationId` in `app/build.gradle.kts` (e `targetPackage` in `res/xml/shortcuts.xml`). Va deciso prima di distribuire l'app.
 - **Nome dell'app:** `app/src/main/res/values-it/strings.xml` (italiano) e `values/strings.xml` (inglese).
 - **Colori:** `app/src/main/res/values*/colors.xml` (le cartelle `-v31` contengono i colori dinamici di Android 12+).

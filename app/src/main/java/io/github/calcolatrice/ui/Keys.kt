@@ -5,6 +5,7 @@ import io.github.calcolatrice.R
 import io.github.calcolatrice.engine.AngleUnit
 import io.github.calcolatrice.engine.CalcKey
 import io.github.calcolatrice.engine.EquationMode
+import io.github.calcolatrice.engine.StatMode
 
 /** Azioni dei tasti: input per l'editor oppure comandi dell'interfaccia. */
 sealed interface PadAction {
@@ -13,14 +14,20 @@ sealed interface PadAction {
     data object ToggleAngle : PadAction
     data object ToggleScientific : PadAction
     data object ShowHistory : PadAction
-    data object OpenEquations : PadAction
+    data object ShowMenu : PadAction
+    data object ShowVariables : PadAction
+    data object Solve : PadAction
+    data object MemoryAdd : PadAction
+    data object MemorySubtract : PadAction
+    data object ToggleFraction : PadAction
     data object Back : PadAction
     data class SetEquationMode(val mode: EquationMode) : PadAction
-    data class Equation(val command: EquationCommand) : PadAction
+    data class SetStatMode(val mode: StatMode) : PadAction
+    data class Sheet(val command: SheetCommand) : PadAction
 }
 
-/** Comandi della schermata equazioni. */
-enum class EquationCommand { NEXT_CELL, PREVIOUS_CELL, CLEAR_CELLS, TOGGLE_FRACTION }
+/** Comandi delle tabelle (equazioni e statistica). */
+enum class SheetCommand { NEXT_CELL, PREVIOUS_CELL, CLEAR_CELLS, DELETE_ROW }
 
 enum class KeyStyle { Number, Operator, Clear, Equals, Function, Toggle }
 
@@ -78,16 +85,27 @@ class KeyFactory(private val context: Context) {
         "", PadAction.ShowHistory, KeyStyle.Function, s(R.string.history), icon = R.drawable.ic_history,
     )
 
-    fun equationsKey() = PadKey(
-        "", PadAction.OpenEquations, KeyStyle.Function, s(R.string.equations), icon = R.drawable.ic_equation,
+    fun menuKey() = PadKey("", PadAction.ShowMenu, KeyStyle.Function, s(R.string.more_options), icon = R.drawable.ic_more_vert)
+
+    fun variableKey(name: Char) = PadKey(
+        name.toString(), input(CalcKey.Variable(name)), KeyStyle.Function, context.getString(R.string.key_variable, name.toString()),
     )
+
+    private fun solveKey() = PadKey(s(R.string.key_solve_short), PadAction.Solve, KeyStyle.Function, s(R.string.key_solve))
+    private fun variablesKey() =
+        PadKey(s(R.string.key_variables_short), PadAction.ShowVariables, KeyStyle.Function, s(R.string.key_variables))
+    private fun memoryAddKey() = PadKey(
+        "M+", PadAction.MemoryAdd, KeyStyle.Function, s(R.string.key_memory_plus),
+        longPressAction = PadAction.MemorySubtract,
+    )
+    private fun memorySubtractKey() = PadKey("M−", PadAction.MemorySubtract, KeyStyle.Function, s(R.string.key_memory_minus))
 
     // ------------------------------------------------------------ schermata equazioni
 
     fun backKey() = PadKey("", PadAction.Back, KeyStyle.Function, s(R.string.back), icon = R.drawable.ic_arrow_back)
 
     fun fractionKey(asFraction: Boolean) = PadKey(
-        s(R.string.fraction_short), PadAction.Equation(EquationCommand.TOGGLE_FRACTION), KeyStyle.Toggle,
+        s(R.string.fraction_short), PadAction.ToggleFraction, KeyStyle.Toggle,
         s(R.string.show_fractions), active = asFraction,
     )
 
@@ -95,22 +113,36 @@ class KeyFactory(private val context: Context) {
         Triple(EquationMode.SYSTEM_2, R.string.mode_system_2, R.string.mode_system_2_description),
         Triple(EquationMode.SYSTEM_3, R.string.mode_system_3, R.string.mode_system_3_description),
         Triple(EquationMode.QUADRATIC, R.string.mode_quadratic, R.string.mode_quadratic_description),
+        Triple(EquationMode.CUBIC, R.string.mode_cubic, R.string.mode_cubic_description),
     ).map { (mode, label, description) ->
         PadKey(s(label), PadAction.SetEquationMode(mode), KeyStyle.Toggle, s(description), active = mode == current)
     }
 
-    /** Spostamento tra i coefficienti e funzioni utili per scriverli. */
-    fun equationTools(): List<PadKey> = listOf(
+    fun statModes(current: StatMode): List<PadKey> = listOf(
+        Triple(StatMode.ONE_VARIABLE, R.string.stat_one_variable, R.string.stat_one_variable_description),
+        Triple(StatMode.REGRESSION, R.string.stat_regression, R.string.stat_regression_description),
+    ).map { (mode, label, description) ->
+        PadKey(s(label), PadAction.SetStatMode(mode), KeyStyle.Toggle, s(description), active = mode == current)
+    }
+
+    private fun cellNavigation() = listOf(
         PadKey(
-            "", PadAction.Equation(EquationCommand.PREVIOUS_CELL), KeyStyle.Function,
+            "", PadAction.Sheet(SheetCommand.PREVIOUS_CELL), KeyStyle.Function,
             s(R.string.previous_coefficient), icon = R.drawable.ic_chevron_left,
         ),
         PadKey(
-            "", PadAction.Equation(EquationCommand.NEXT_CELL), KeyStyle.Function,
+            "", PadAction.Sheet(SheetCommand.NEXT_CELL), KeyStyle.Function,
             s(R.string.next_coefficient), icon = R.drawable.ic_chevron_right,
         ),
+    )
+
+    /** Spostamento tra i coefficienti e funzioni utili per scriverli. */
+    fun equationTools(): List<PadKey> = cellNavigation() + listOf(rootKey(inverse = false), rootKey(inverse = true), piKey())
+
+    /** Come per le equazioni, con il tasto per eliminare la riga selezionata. */
+    fun statisticsTools(): List<PadKey> = cellNavigation() + listOf(
+        PadKey(s(R.string.delete_row_short), PadAction.Sheet(SheetCommand.DELETE_ROW), KeyStyle.Function, s(R.string.delete_row)),
         rootKey(inverse = false),
-        rootKey(inverse = true),
         piKey(),
     )
 
@@ -119,7 +151,7 @@ class KeyFactory(private val context: Context) {
         listOf(
             PadKey(
                 "AC", input(CalcKey.Clear), KeyStyle.Clear, s(R.string.clear_coefficient),
-                longPressAction = PadAction.Equation(EquationCommand.CLEAR_CELLS),
+                longPressAction = PadAction.Sheet(SheetCommand.CLEAR_CELLS),
             ),
             PadKey("( )", input(CalcKey.Parentheses), KeyStyle.Operator, s(R.string.key_parentheses)),
             PadKey("xʸ", input(CalcKey.Operator('^')), KeyStyle.Operator, s(R.string.key_power)),
@@ -187,23 +219,25 @@ class KeyFactory(private val context: Context) {
     private fun eKey() = fn("e", CalcKey.Constant('e'), R.string.key_e)
     private fun factorialKey() = fn("x!", CalcKey.Factorial, R.string.key_factorial)
 
-    /** In verticale: 4 colonne × 3 righe (la prima sempre visibile). */
+    /** In verticale: 4 colonne × 4 righe (la prima sempre visibile). */
     fun scientificPortrait(inverse: Boolean, angleUnit: AngleUnit): List<List<PadKey>> = listOf(
         listOf(inverseKey(inverse), angleKey(angleUnit), rootKey(inverse), powerKey()),
         trigKeys(inverse) + piKey(),
         logKeys(inverse) + factorialKey() + eKey(),
+        listOf(variableKey('X'), solveKey(), variablesKey(), memoryAddKey()),
     )
 
-    /** In orizzontale: 3 colonne × 5 righe, allineate al tastierino principale. */
+    /** In orizzontale: 4 colonne × 5 righe, allineate al tastierino principale. */
     fun scientificLandscape(inverse: Boolean, angleUnit: AngleUnit): List<List<PadKey>> = listOf(
-        listOf(inverseKey(inverse), angleKey(angleUnit), powerKey()),
-        trigKeys(inverse),
-        logKeys(inverse) + rootKey(inverse),
-        listOf(piKey(), eKey(), factorialKey()),
+        listOf(inverseKey(inverse), angleKey(angleUnit), powerKey(), variableKey('X')),
+        trigKeys(inverse) + solveKey(),
+        logKeys(inverse) + rootKey(inverse) + variablesKey(),
+        listOf(piKey(), eKey(), factorialKey(), memoryAddKey()),
         listOf(
             fn("(", CalcKey.OpenParen, R.string.key_open_paren),
             fn(")", CalcKey.CloseParen, R.string.key_close_paren),
             fn("1/x", CalcKey.Reciprocal, R.string.key_reciprocal),
+            memorySubtractKey(),
         ),
     )
 }

@@ -136,7 +136,7 @@ class CalculatorEditorTest {
         val minusFive = type(*digits("0-5"), CalcKey.Equals).state
         val squared = type(CalcKey.Square, start = minusFive)
         assertEquals("(-5)^2", ExpressionText.expandAns(squared.state.expression, minusFive.ans!!))
-        assertEquals("(−5)^2", DisplayFormatter().format(squared.state.expression, squared.state.ans))
+        assertEquals("(−5)²", DisplayFormatter().format(squared.state.expression, squared.state.ans))
         assertEquals("25", CalculatorEditor.preview(squared.state, AngleUnit.DEGREES)?.toPlainString())
         val done = type(CalcKey.Equals, start = squared.state)
         assertEquals(CompletedCalculation("(-5)^2", "25"), done.completed)

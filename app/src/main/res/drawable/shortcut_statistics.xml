@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Icona della scorciatoia "Statistica": cerchio con il colore dell'app e un istogramma. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <path
+        android:fillColor="@color/ic_launcher_background"
+        android:pathData="M24,0a24,24 0,1 1,0 48a24,24 0,1 1,0 -48z" />
+    <path
+        android:fillColor="@color/ic_launcher_foreground"
+        android:pathData="M15,25h4v9h-4zM22,15h4v19h-4zM29,21h4v13h-4z" />
+</vector>

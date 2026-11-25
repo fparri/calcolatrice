@@ -12,6 +12,9 @@ enum class EquationMode(val equations: Int, val coefficients: Int) {
 
     /** ax² + bx + c = 0. */
     QUADRATIC(1, 3),
+
+    /** ax³ + bx² + cx + d = 0. */
+    CUBIC(1, 4),
     ;
 
     val cellCount: Int get() = equations * coefficients
@@ -20,6 +23,7 @@ enum class EquationMode(val equations: Int, val coefficients: Int) {
 sealed interface EquationOutcome {
     data class System(val solution: LinearSolution) : EquationOutcome
     data class Quadratic(val solution: QuadraticSolution) : EquationOutcome
+    data class Cubic(val solution: CubicSolution) : EquationOutcome
 
     /** Errore nel calcolo; [cell] è il coefficiente che non si riesce a calcolare, se è quello il problema. */
     data class Error(val error: CalcError, val cell: Int? = null) : EquationOutcome
@@ -111,6 +115,8 @@ class EquationSheet(
                     EquationOutcome.System(LinearSystem.solve(values.chunked(mode.coefficients)))
                 EquationMode.QUADRATIC ->
                     EquationOutcome.Quadratic(QuadraticEquation.solve(values[0], values[1], values[2]))
+                EquationMode.CUBIC ->
+                    EquationOutcome.Cubic(CubicEquation.solve(values[0], values[1], values[2], values[3]))
             }
         } catch (e: CalcException) {
             EquationOutcome.Error(e.error)

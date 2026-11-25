@@ -52,8 +52,8 @@
     <!-- Equazioni e sistemi -->
     <string name="equations">Equations and systems</string>
     <string name="back">Back</string>
-    <string name="mode_system_2">2×2 system</string>
-    <string name="mode_system_3">3×3 system</string>
+    <string name="mode_system_2">2×2</string>
+    <string name="mode_system_3">3×3</string>
     <string name="mode_quadratic">Quadratic</string>
     <string name="mode_system_2_description">System of two equations in two unknowns</string>
     <string name="mode_system_3_description">System of three equations in three unknowns</string>
@@ -76,4 +76,56 @@
     <string name="linear_equation">a = 0: linear equation</string>
     <string name="vertex_minimum">Minimum: x = %1$s; y = %2$s</string>
     <string name="vertex_maximum">Maximum: x = %1$s; y = %2$s</string>
+
+    <!-- Menu, formato dei numeri, variabili e memoria -->
+    <string name="more_options">More options</string>
+    <string name="statistics">Statistics</string>
+    <string name="variables">Variables and memory</string>
+    <string name="number_format">Number format</string>
+    <string name="format_description">Number format: %1$s</string>
+    <string name="format_normal">Normal</string>
+    <string name="format_fix">Fixed decimals (Fix)</string>
+    <string name="format_sci">Scientific notation (Sci)</string>
+    <string name="format_eng">Engineering notation (Eng)</string>
+    <string name="format_fix_digits">Number of decimals</string>
+    <string name="format_sci_digits">Significant digits</string>
+    <string name="key_solve_short" translatable="false">SOLVE</string>
+    <string name="key_solve">Solve for X: find X where the expression equals zero</string>
+    <string name="key_variables_short" translatable="false">VAR</string>
+    <string name="key_variables">Variables and memory</string>
+    <string name="key_variable">variable %1$s</string>
+    <string name="key_memory_plus">Add to memory. Long press to subtract</string>
+    <string name="key_memory_minus">Subtract from memory</string>
+    <string name="memory_indicator_description">Memory in use</string>
+    <string name="store_short" translatable="false">STO</string>
+    <string name="store_description">Save the result in %1$s</string>
+    <string name="insert_variable">Insert %1$s, value %2$s</string>
+    <string name="clear_variables">Clear all</string>
+    <string name="error_no_solution">No solution found</string>
+    <string name="save_to_variable">Save in a variable</string>
+    <string name="choose_value">Which value?</string>
+    <string name="saved_in">Saved in %1$s</string>
+
+    <!-- Equazioni di terzo grado -->
+    <string name="mode_cubic">Cubic</string>
+    <string name="mode_cubic_description">Cubic equation</string>
+    <string name="formula_cubic" translatable="false">ax³ + bx² + cx + d = 0</string>
+    <string name="quadratic_equation">a = 0: quadratic equation</string>
+
+    <!-- Statistica -->
+    <string name="stat_one_variable">1 variable</string>
+    <string name="stat_regression">Regression</string>
+    <string name="stat_one_variable_description">Statistics of one variable</string>
+    <string name="stat_regression_description">Linear regression y = a + bx</string>
+    <string name="stat_hint">Enter the data and press =</string>
+    <string name="stat_results_hint">Tap to save a result in a variable</string>
+    <string name="stat_not_enough">Enter at least one value</string>
+    <string name="stat_not_enough_regression">At least two points are needed</string>
+    <string name="stat_cell_description">Row %1$d, %2$s: %3$s</string>
+    <string name="delete_row_short" translatable="false">DEL</string>
+    <string name="delete_row">Delete row</string>
+
+    <!-- Scorciatoie dell'icona -->
+    <string name="shortcut_equations_short">Equations</string>
+    <string name="shortcut_statistics_short">Statistics</string>
 </resources>

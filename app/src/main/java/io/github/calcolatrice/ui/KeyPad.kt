@@ -62,7 +62,7 @@ object HardwareKeys {
         in '0'..'9' -> CalcKey.Digit(c)
         '.', ',' -> CalcKey.Decimal
         '+', '-', '*', '/', '^' -> CalcKey.Operator(c)
-        'x', 'X', '×' -> CalcKey.Operator('*')
+        'x', '×' -> CalcKey.Operator('*')
         ':', '÷' -> CalcKey.Operator('/')
         '%' -> CalcKey.Percent
         '!' -> CalcKey.Factorial

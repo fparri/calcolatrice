@@ -18,12 +18,20 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
         </activity>
 
         <activity
             android:name=".EquationActivity"
             android:exported="false"
             android:label="@string/equations" />
+
+        <activity
+            android:name=".StatisticsActivity"
+            android:exported="false"
+            android:label="@string/statistics" />
     </application>
 
 </manifest>

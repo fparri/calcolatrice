@@ -140,6 +140,113 @@ object QuadraticEquation {
     }
 }
 
+/** Soluzione di ax³ + bx² + cx + d = 0. */
+sealed interface CubicSolution {
+    /**
+     * Radici reali dalla maggiore alla minore, ripetute secondo la molteplicità
+     * (tre valori, oppure uno solo se le altre due sono la coppia complessa `re ± im·i`).
+     */
+    data class Roots(val real: List<BigDecimal>, val complex: Pair<BigDecimal, BigDecimal>? = null) : CubicSolution
+
+    /** `a = 0`: l'equazione è di secondo grado. */
+    data class Quadratic(val solution: QuadraticSolution) : CubicSolution
+}
+
+object CubicEquation {
+
+    fun solve(a: BigDecimal, b: BigDecimal, c: BigDecimal, d: BigDecimal): CubicSolution {
+        if (a.signum() == 0) return CubicSolution.Quadratic(QuadraticEquation.solve(b, c, d))
+        val mc = BigMath.WORK
+        val three = BigDecimal(3)
+
+        // Discriminante calcolato esatto: se è zero ci sono radici multiple, con formule esatte.
+        val terms = listOf(
+            BigDecimal(18).multiply(a).multiply(b).multiply(c).multiply(d),
+            FOUR.multiply(b.pow(3)).multiply(d).negate(),
+            b.pow(2).multiply(c.pow(2)),
+            FOUR.multiply(a).multiply(c.pow(3)).negate(),
+            BigDecimal(27).multiply(a.pow(2)).multiply(d.pow(2)).negate(),
+        )
+        val discriminant = terms.fold(BigDecimal.ZERO, BigDecimal::add)
+        val delta0 = b.pow(2).subtract(three.multiply(a).multiply(c))
+        if (isNegligible(discriminant, terms.maxOf { it.abs() })) {
+            val roots = if (isNegligible(delta0, b.pow(2).max(three.multiply(a).multiply(c).abs()))) {
+                val triple = b.negate().divide(three.multiply(a), mc)
+                listOf(triple, triple, triple)
+            } else {
+                val double = BigDecimal(9).multiply(a).multiply(d).subtract(b.multiply(c))
+                    .divide(TWO.multiply(delta0), mc)
+                val single = FOUR.multiply(a).multiply(b).multiply(c)
+                    .subtract(BigDecimal(9).multiply(a.pow(2)).multiply(d))
+                    .subtract(b.pow(3))
+                    .divide(a.multiply(delta0), mc)
+                listOf(single, double, double)
+            }
+            return finish(roots, null)
+        }
+
+        // Una radice reale c'è sempre; le altre due vengono dall'equazione di secondo grado che resta.
+        val r = realRoot(a, b, c, d)
+        val q1 = b.add(a.multiply(r, mc), mc)
+        val q0 = c.add(q1.multiply(r, mc), mc)
+        val polish = { x: BigDecimal -> newton(a, b, c, d, x) }
+        return when (val rest = QuadraticEquation.solve(a, q1, q0)) {
+            is QuadraticSolution.TwoReal -> finish(listOf(r, polish(rest.x1), polish(rest.x2)), null)
+            is QuadraticSolution.DoubleRoot -> finish(listOf(r, polish(rest.x), polish(rest.x)), null)
+            is QuadraticSolution.ComplexPair -> finish(listOf(r), rest.re to rest.im)
+            is QuadraticSolution.Linear -> finish(listOf(r), null) // impossibile con a ≠ 0
+        }
+    }
+
+    private fun finish(real: List<BigDecimal>, complex: Pair<BigDecimal, BigDecimal>?): CubicSolution.Roots {
+        val scale = real.maxOf { it.abs() }.max(complex?.let { it.first.abs().max(it.second.abs()) } ?: BigDecimal.ZERO)
+        val sorted = real.map { clean(it, scale) }.sortedDescending()
+        return CubicSolution.Roots(sorted, complex?.let { (re, im) -> clean(re, scale) to MathSupport.checked(im.round(MathSupport.MC)) })
+    }
+
+    private fun value(a: BigDecimal, b: BigDecimal, c: BigDecimal, d: BigDecimal, x: BigDecimal): BigDecimal {
+        val mc = BigMath.WORK
+        return a.multiply(x, mc).add(b, mc).multiply(x, mc).add(c, mc).multiply(x, mc).add(d, mc)
+    }
+
+    /** Raffina una radice con due passi di Newton sul polinomio originale. */
+    private fun newton(a: BigDecimal, b: BigDecimal, c: BigDecimal, d: BigDecimal, start: BigDecimal): BigDecimal {
+        val mc = BigMath.WORK
+        var x = start
+        repeat(3) {
+            val derivative = BigDecimal(3).multiply(a).multiply(x, mc).add(TWO.multiply(b), mc).multiply(x, mc).add(c, mc)
+            if (derivative.signum() == 0) return x
+            x = x.subtract(value(a, b, c, d, x).divide(derivative, mc), mc)
+        }
+        return x
+    }
+
+    /** Una radice reale per bisezione tra ±R (limite di Cauchy), poi Newton. */
+    private fun realRoot(a: BigDecimal, b: BigDecimal, c: BigDecimal, d: BigDecimal): BigDecimal {
+        if (d.signum() == 0) return BigDecimal.ZERO
+        val mc = BigMath.WORK
+        val bound = BigDecimal.ONE.add(b.abs().max(c.abs()).max(d.abs()).divide(a.abs(), mc), mc)
+        // Il segno di f(+R) è quello di a, il segno di f(−R) è l'opposto.
+        var low = bound.negate()
+        var high = bound
+        if (a.signum() < 0) {
+            low = bound
+            high = bound.negate()
+        }
+        val tolerance = BigDecimal("1E-45")
+        repeat(600) {
+            val middle = low.add(high, mc).divide(TWO, mc)
+            val fm = value(a, b, c, d, middle)
+            if (fm.signum() == 0) return middle
+            if (fm.signum() < 0) low = middle else high = middle
+            if (high.subtract(low).abs() <= low.abs().max(high.abs()).multiply(tolerance)) {
+                return newton(a, b, c, d, middle)
+            }
+        }
+        return newton(a, b, c, d, low.add(high, mc).divide(TWO, mc))
+    }
+}
+
 /** Frazione ridotta con denominatore positivo. */
 data class Fraction(val numerator: BigInteger, val denominator: BigInteger)
 
@@ -185,8 +292,11 @@ object Fractions {
     }
 }
 
-/** Testo dei risultati di equazioni e sistemi, come decimale o come frazione. */
-class SolutionFormatter(private val display: DisplayFormatter) {
+/** Testo dei risultati, come frazione oppure come decimale nel [format] scelto. */
+class SolutionFormatter(
+    private val display: DisplayFormatter,
+    private val format: NumberFormat = NumberFormat.Normal,
+) {
 
     fun value(x: BigDecimal, asFraction: Boolean): String {
         if (asFraction) {
@@ -195,7 +305,7 @@ class SolutionFormatter(private val display: DisplayFormatter) {
                 return display.format(fraction.numerator.toString()) + "/" + display.format(fraction.denominator.toString())
             }
         }
-        return display.format(ResultFormatter.toInternal(x))
+        return display.format(ResultFormatter.format(x, format))
     }
 
     /** `re + im·i` oppure `re − im·i`. */

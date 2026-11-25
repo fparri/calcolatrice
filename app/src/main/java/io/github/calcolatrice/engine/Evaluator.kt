@@ -3,24 +3,19 @@ package io.github.calcolatrice.engine
 import java.math.BigDecimal
 import java.math.MathContext
 import java.math.RoundingMode
-import kotlin.math.abs
-import kotlin.math.acos
-import kotlin.math.asin
-import kotlin.math.atan
-import kotlin.math.cos
-import kotlin.math.floor
-import kotlin.math.ln
 import kotlin.math.log10
-import kotlin.math.pow
-import kotlin.math.sin
-import kotlin.math.sqrt
-import kotlin.math.tan
 
 /** Unità di misura degli angoli per le funzioni trigonometriche. */
 enum class AngleUnit { DEGREES, RADIANS }
 
 /** Errori che possono emergere dalla valutazione di un'espressione. */
-enum class CalcError { DIVISION_BY_ZERO, UNDEFINED, OVERFLOW, SYNTAX }
+enum class CalcError { DIVISION_BY_ZERO, UNDEFINED, OVERFLOW, SYNTAX, NO_SOLUTION }
+
+/**
+ * Variabili utilizzabili nelle espressioni, come sulle calcolatrici scientifiche.
+ * Manca la E, che nel formato interno indica l'esponente (1.5E-7).
+ */
+const val VARIABLES = "ABCDXYM"
 
 sealed interface EvalResult {
     data class Success(val value: BigDecimal) : EvalResult
@@ -35,7 +30,7 @@ internal class CalcException(val error: CalcError) : RuntimeException(error.name
  * Formato interno:
  * - numeri con il punto come separatore decimale, eventualmente in notazione `1.5E-7`
  * - operatori `+ - * / ^`, postfissi `!` (fattoriale) e `%` (diviso 100)
- * - costanti `π`, `e` e `@` (risultato precedente, "Ans")
+ * - costanti `π`, `e` e `@` (risultato precedente, "Ans"); variabili `A B C D X Y M` (valore 0 se non definite)
  * - `√` (radice quadrata, prefisso) e funzioni `sin( cos( tan( asin( acos( atan( ln( log(`
  *
  * `√` si applica solo all'operando che lo segue: `√9! = (√9)!`, `√4^2 = (√4)^2`.
@@ -49,8 +44,9 @@ fun evaluate(
     expression: String,
     angleUnit: AngleUnit = AngleUnit.DEGREES,
     ans: BigDecimal? = null,
+    variables: Map<Char, BigDecimal> = emptyMap(),
 ): EvalResult = try {
-    EvalResult.Success(Parser(Tokenizer.tokenize(expression), angleUnit, ans).parse())
+    EvalResult.Success(Parser(Tokenizer.tokenize(expression), angleUnit, ans, variables).parse())
 } catch (e: CalcException) {
     EvalResult.Failure(e.error)
 } catch (e: ArithmeticException) {
@@ -65,6 +61,7 @@ internal sealed interface Token {
     data class Postfix(val symbol: Char) : Token
     data class Function(val name: String) : Token
     data class Constant(val symbol: Char) : Token
+    data class Variable(val name: Char) : Token
     data object OpenParen : Token
     data object CloseParen : Token
     data object Sqrt : Token
@@ -99,6 +96,7 @@ internal object Tokenizer {
                 c == ')' -> tokens += Token.CloseParen
                 c == '√' -> tokens += Token.Sqrt
                 c == 'π' || c == '@' -> tokens += Token.Constant(c)
+                c in VARIABLES -> tokens += Token.Variable(c)
                 c.isLetter() -> {
                     val name = FUNCTIONS.firstOrNull { input.startsWith("$it(", i) }
                     if (name != null) {
@@ -119,11 +117,8 @@ internal object Tokenizer {
 }
 
 internal object MathSupport {
-    /** Precisione interna: 34 cifre significative (come IEEE decimal128). */
+    /** Precisione dei risultati: 34 cifre significative (come IEEE decimal128). */
     val MC = MathContext(34, RoundingMode.HALF_EVEN)
-
-    /** Precisione dei risultati calcolati in virgola mobile (double). */
-    val DOUBLE_MC = MathContext(15, RoundingMode.HALF_EVEN)
 
     /** Oltre 10^MAX_EXPONENT il risultato è considerato troppo grande. */
     const val MAX_EXPONENT = 9999
@@ -132,18 +127,22 @@ internal object MathSupport {
     val E = BigDecimal("2.718281828459045235360287471352662")
     private val DEG_360 = BigDecimal(360)
 
+    /** Oltre questo valore (in radianti) la riduzione dell'angolo perderebbe tutte le cifre. */
+    private val MAX_RADIANS = BigDecimal("1E18")
+
+    /** Residui come sin(π) ≈ 3·10⁻³⁴: π stesso è arrotondato a 34 cifre. */
+    private val TRIG_RESIDUE = BigDecimal("1E-32")
+    private val TAN_POLE = BigDecimal("1E-30")
+
     /** Esponente decimale di x (posizione della cifra più significativa). */
     fun exponentOf(x: BigDecimal): Int = x.precision() - x.scale() - 1
 
-    /** log10(|x|) per qualunque BigDecimal diverso da zero, anche fuori dal range del double. */
+    /** log10(|x|) approssimato, per qualunque BigDecimal diverso da zero (serve solo per i controlli). */
     fun log10Abs(x: BigDecimal): Double {
         val exp = exponentOf(x)
         val mantissa = x.abs().movePointLeft(exp).toDouble()
         return log10(mantissa) + exp
     }
-
-    fun fitsInDouble(x: BigDecimal): Boolean =
-        x.signum() == 0 || abs(log10Abs(x)) < 300
 
     /** Controlla che il valore sia in un intervallo gestibile. */
     fun checked(x: BigDecimal): BigDecimal {
@@ -154,36 +153,12 @@ internal object MathSupport {
         return x
     }
 
-    fun fromDouble(d: Double): BigDecimal {
-        if (d.isNaN()) throw CalcException(CalcError.UNDEFINED)
-        if (d.isInfinite()) throw CalcException(CalcError.OVERFLOW)
-        if (d == 0.0) return BigDecimal.ZERO
-        return BigDecimal.valueOf(d).round(DOUBLE_MC)
-    }
-
     fun isInteger(x: BigDecimal): Boolean =
         x.signum() == 0 || x.stripTrailingZeros().scale() <= 0
 
-    /** 10^magnitude con segno, per risultati fuori dal range del double. */
-    fun fromLog10(magnitude: Double, negative: Boolean): BigDecimal {
-        val intPart = floor(magnitude)
-        val mantissa = BigDecimal.valueOf(10.0.pow(magnitude - intPart)).round(DOUBLE_MC)
-        val value = mantissa.scaleByPowerOfTen(intPart.toInt())
-        return checked(if (negative) value.negate() else value)
-    }
-
     fun sqrt(x: BigDecimal): BigDecimal {
         if (x.signum() < 0) throw CalcException(CalcError.UNDEFINED)
-        if (x.signum() == 0) return BigDecimal.ZERO
-        // Stima iniziale in double, poi raffinamento di Newton a 34 cifre.
-        var y = if (fitsInDouble(x)) {
-            BigDecimal.valueOf(sqrt(x.toDouble()))
-        } else {
-            fromLog10(log10Abs(x) / 2, negative = false)
-        }
-        val two = BigDecimal(2)
-        repeat(4) { y = y.add(x.divide(y, MC), MC).divide(two, MC) }
-        return y.round(MathContext(32, RoundingMode.HALF_EVEN)).stripTrailingZeros()
+        return BigMath.sqrt(x).round(MC).stripTrailingZeros()
     }
 
     fun power(base: BigDecimal, exponent: BigDecimal): BigDecimal {
@@ -195,20 +170,21 @@ internal object MathSupport {
         val integerExponent = isInteger(exponent)
         if (!integerExponent && base.signum() < 0) throw CalcException(CalcError.UNDEFINED)
 
+        // Controllo dell'ordine di grandezza prima di calcolare.
         val magnitude = log10Abs(base) * exponent.toDouble()
         if (magnitude.isNaN()) throw CalcException(CalcError.UNDEFINED)
-        if (magnitude > MAX_EXPONENT) throw CalcException(CalcError.OVERFLOW)
-        if (magnitude < -MAX_EXPONENT) return BigDecimal.ZERO
+        if (magnitude > MAX_EXPONENT + 1) throw CalcException(CalcError.OVERFLOW)
+        if (magnitude < -MAX_EXPONENT - 1) return BigDecimal.ZERO
 
+        // e^x con la vera esponenziale: la costante e a 34 cifre, elevata a potenza, perderebbe precisione.
+        if (base.compareTo(E) == 0) return checked(BigMath.exp(exponent).round(MC))
         if (integerExponent && exponent.abs() <= BigDecimal(100_000)) {
             return checked(base.pow(exponent.intValueExact(), MC))
         }
+        // x^y = e^(y·ln|x|), col segno giusto per gli esponenti interi dispari.
         val negative = base.signum() < 0 && exponent.toBigInteger().testBit(0)
-        return if (abs(magnitude) < 300 && fitsInDouble(base)) {
-            fromDouble(base.toDouble().pow(exponent.toDouble()))
-        } else {
-            fromLog10(magnitude, negative)
-        }
+        val value = BigMath.exp(exponent.multiply(BigMath.ln(base.abs()), BigMath.WORK))
+        return checked((if (negative) value.negate() else value).round(MC))
     }
 
     fun factorial(x: BigDecimal): BigDecimal {
@@ -227,7 +203,7 @@ internal object MathSupport {
     }
 
     fun trig(name: String, x: BigDecimal, unit: AngleUnit): BigDecimal {
-        val radians: Double
+        val radians: BigDecimal
         if (unit == AngleUnit.DEGREES) {
             val angle = normalizeDegrees(x)
             // Valori esatti per i multipli di 90°.
@@ -243,50 +219,50 @@ internal object MathSupport {
                     }
                 }
             }
-            radians = Math.toRadians(angle.toDouble())
+            radians = BigMath.toRadians(angle)
         } else {
-            if (!fitsInDouble(x)) throw CalcException(CalcError.UNDEFINED)
-            radians = x.toDouble()
+            if (x.abs() >= MAX_RADIANS) throw CalcException(CalcError.UNDEFINED)
+            radians = x
         }
+        val (sin, cos) = BigMath.sinCos(radians)
         val value = when (name) {
-            "sin" -> sin(radians)
-            "cos" -> cos(radians)
+            "sin" -> sin
+            "cos" -> cos
             else -> {
-                // Multipli dispari di π/2: il coseno è zero a meno di residui numerici.
-                if (abs(cos(radians)) < 1e-15) throw CalcException(CalcError.UNDEFINED)
-                tan(radians)
+                // Multipli dispari di π/2: il coseno è zero a meno dei residui di π.
+                if (cos.abs() < TAN_POLE) throw CalcException(CalcError.UNDEFINED)
+                sin.divide(cos, BigMath.WORK)
             }
         }
-        // Elimina i residui numerici come sin(π) = 1.2E-16.
-        if (abs(value) < 1e-15 && abs(radians) >= 1) return BigDecimal.ZERO
-        return fromDouble(value)
+        if (radians.abs() >= BigDecimal.ONE && value.abs() < radians.abs().multiply(TRIG_RESIDUE)) {
+            return BigDecimal.ZERO
+        }
+        return value.round(MC)
     }
 
     fun inverseTrig(name: String, x: BigDecimal, unit: AngleUnit): BigDecimal {
         if (name != "atan" && x.abs() > BigDecimal.ONE) throw CalcException(CalcError.UNDEFINED)
-        val d = if (fitsInDouble(x)) x.toDouble() else x.signum() * Double.MAX_VALUE
         val radians = when (name) {
-            "asin" -> asin(d)
-            "acos" -> acos(d)
-            else -> atan(d)
+            "asin" -> BigMath.asin(x)
+            "acos" -> BigMath.acos(x)
+            else -> BigMath.atan(x)
         }
-        return fromDouble(if (unit == AngleUnit.DEGREES) Math.toDegrees(radians) else radians)
+        val value = if (unit == AngleUnit.DEGREES) BigMath.toDegrees(radians) else radians
+        return value.round(MC)
     }
 
     fun logarithm(name: String, x: BigDecimal): BigDecimal {
         if (x.signum() <= 0) throw CalcException(CalcError.UNDEFINED)
-        val log10 = log10Abs(x)
-        return when (name) {
-            "log" -> fromDouble(log10)
-            else -> fromDouble(if (fitsInDouble(x)) ln(x.toDouble()) else log10 * ln(10.0))
-        }
+        val value = if (name == "log") BigMath.log10(x) else BigMath.ln(x)
+        return value.round(MC)
     }
 }
 
-private class Parser(
+internal class Parser(
     private val tokens: List<Token>,
     private val angleUnit: AngleUnit,
     private val ans: BigDecimal?,
+    private val variables: Map<Char, BigDecimal> = emptyMap(),
 ) {
     private var pos = 0
     private val mc = MathSupport.MC
@@ -358,7 +334,7 @@ private class Parser(
         }
     }
 
-    private fun startsOperand(t: Token) = t is Token.Number || t is Token.Constant ||
+    private fun startsOperand(t: Token) = t is Token.Number || t is Token.Constant || t is Token.Variable ||
         t is Token.Function || t == Token.OpenParen || t == Token.Sqrt
 
     // unario := ('-' | '+') unario | potenza
@@ -413,6 +389,7 @@ private class Parser(
             'e' -> MathSupport.E
             else -> ans ?: throw CalcException(CalcError.SYNTAX)
         }
+        is Token.Variable -> variables[t.name] ?: BigDecimal.ZERO
         Token.OpenParen -> parseExpression().also { expectCloseParen() }
         is Token.Function -> {
             val argument = parseExpression()

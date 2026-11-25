@@ -88,4 +88,18 @@ fun errorMessage(error: CalcError): Int = when (error) {
     CalcError.UNDEFINED -> R.string.error_undefined
     CalcError.OVERFLOW -> R.string.error_overflow
     CalcError.SYNTAX -> R.string.error_syntax
+    CalcError.NO_SOLUTION -> R.string.error_no_solution
+}
+
+/** Sfondo di una cella di tabella: bordo colorato se selezionata o in errore. */
+fun Context.cellBackground(palette: Palette, selected: Boolean, error: Boolean): Drawable {
+    val shape = GradientDrawable().apply {
+        setColor(palette.panel)
+        cornerRadius = dp(12).toFloat()
+        when {
+            error -> setStroke(dp(2), palette.error)
+            selected -> setStroke(dp(2), palette.accent)
+        }
+    }
+    return RippleDrawable(ColorStateList.valueOf(rippleColor(palette.onBackground)), shape, null)
 }
