@@ -1,9 +1,9 @@
 plugins {
     alias(libs.plugins.android.application)
-    // Con AGP 9 il supporto Kotlin è integrato: nessun plugin Kotlin aggiuntivo.
+    // Con AGP 9 il supporto Kotlin è integrato.
 }
 
-// Valori passati dal workflow di GitHub Actions (vedi .github/workflows/build.yml).
+// Valori passati dal workflow di GitHub Actions.
 val ciVersionCode = providers.environmentVariable("VERSION_CODE").orNull?.toIntOrNull()
 val ciVersionName = providers.environmentVariable("VERSION_NAME").orNull
 val signingKeystore = providers.environmentVariable("SIGNING_KEYSTORE_PATH").orNull?.takeIf { it.isNotBlank() }
@@ -24,6 +24,7 @@ android {
         if (signingKeystore != null) {
             create("release") {
                 storeFile = file(signingKeystore)
+                storeType = "PKCS12"
                 storePassword = providers.environmentVariable("SIGNING_STORE_PASSWORD").orNull
                 keyAlias = providers.environmentVariable("SIGNING_KEY_ALIAS").orNull
                 keyPassword = providers.environmentVariable("SIGNING_KEY_PASSWORD").orNull
@@ -33,15 +34,17 @@ android {
 
     buildTypes {
         getByName("release") {
-            // R8: rimuove il codice inutilizzato, ottimizza e offusca. Rimuove anche le risorse inutili.
+            // Ottimizzazione e riduzione delle dimensioni dell'APK.
             isMinifyEnabled = true
             isShrinkResources = true
+
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            // Con i Secrets configurati usa la tua chiave; altrimenti la chiave di debug,
-            // così l'APK di release è comunque installabile.
+
+            // Firma privata per GitHub Actions.
+            // Firma debug disponibile per compilazioni locali.
             signingConfig = if (signingKeystore != null) {
                 signingConfigs.getByName("release")
             } else {
@@ -56,7 +59,7 @@ android {
     }
 
     androidResources {
-        // Scelta della lingua per singola app nelle impostazioni di Android 13+.
+        // Scelta della lingua per singola app su Android 13+.
         generateLocaleConfig = true
     }
 }
