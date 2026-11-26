@@ -4,12 +4,9 @@ import android.animation.LayoutTransition
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.AlertDialog
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Intent
 import android.content.SharedPreferences
 import android.graphics.Typeface
-import android.os.Build
 import android.os.Bundle
 import android.text.SpannableStringBuilder
 import android.text.Spanned
@@ -26,7 +23,6 @@ import android.widget.LinearLayout
 import android.widget.PopupMenu
 import android.widget.ScrollView
 import android.widget.TextView
-import android.widget.Toast
 import io.github.calcolatrice.engine.AngleUnit
 import io.github.calcolatrice.engine.CalcKey
 import io.github.calcolatrice.engine.CalculatorSession
@@ -45,6 +41,7 @@ import io.github.calcolatrice.ui.KeyPad
 import io.github.calcolatrice.ui.PadAction
 import io.github.calcolatrice.ui.Palette
 import io.github.calcolatrice.ui.Settings
+import io.github.calcolatrice.ui.copyText
 import io.github.calcolatrice.ui.dp
 import io.github.calcolatrice.ui.errorMessage
 import io.github.calcolatrice.ui.localFunctionNames
@@ -256,12 +253,7 @@ class MainActivity : Activity() {
             preview != null -> ResultFormatter.toInternal(preview)
             else -> calc.expression.ifEmpty { "0" }
         }
-        val clipboard = getSystemService(ClipboardManager::class.java) ?: return
-        clipboard.setPrimaryClip(ClipData.newPlainText(getString(R.string.app_name), plainFormatter.format(value, ans)))
-        // Da Android 13 il sistema mostra già una conferma.
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-            Toast.makeText(this, R.string.copied, Toast.LENGTH_SHORT).show()
-        }
+        copyText(getString(R.string.app_name), plainFormatter.format(value, ans))
     }
 
     /** Tocco sul display: sposta il cursore nel punto toccato. */
@@ -412,7 +404,7 @@ class MainActivity : Activity() {
         } else {
             column.addView(buildScientificPanel(), LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
             column.addView(View(this), LinearLayout.LayoutParams(MATCH_PARENT, dp(12)))
-            val (mainGrid, _) = pad.grid(keys.main(decimalSeparator), dp(8), 30f)
+            val (mainGrid, _) = pad.grid(keys.main(decimalSeparator), dp(KEY_SPACING), 30f)
             mainGridView = mainGrid
             column.addView(mainGrid, LinearLayout.LayoutParams(MATCH_PARENT, 0, 2f))
         }
@@ -518,34 +510,31 @@ class MainActivity : Activity() {
         return display
     }
 
-    /** Pannello scientifico verticale: prima riga sempre visibile, le altre a scomparsa. */
+    /**
+     * Pannello scientifico verticale: prima riga sempre visibile, le altre a scomparsa, e in fondo una
+     * maniglia con la freccia per aprirlo e chiuderlo. Le righe usano tutta la larghezza con la stessa
+     * spaziatura del tastierino, così le colonne dei due blocchi sono allineate.
+     */
     private fun buildScientificPanel(): View {
         val rows = keys.scientificPortrait(session.inverse, session.angleUnit)
         val panel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            background = roundedDrawable(palette.panel, dp(28).toFloat())
-            setPadding(dp(4), dp(4), dp(4), dp(4))
+            background = roundedDrawable(palette.panel, dp(24).toFloat())
+            setPadding(0, dp(4), 0, 0)
             layoutTransition = LayoutTransition()
         }
-
-        val firstLine = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        val (firstRow, firstButtons) = pad.row(rows.first(), dp(4), 18f)
-        firstLine.addView(firstRow, LinearLayout.LayoutParams(0, dp(44), 1f))
-        val expand = pad.button(keys.expandKey(scientificExpanded), 18f)
-        expandButton = expand
-        firstLine.addView(expand, LinearLayout.LayoutParams(dp(44), dp(44)).apply { marginStart = dp(4) })
-        panel.addView(firstLine, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
-
-        val extra = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        val extraButtons = rows.drop(1).map { row ->
-            val line = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-            val (rowView, rowButtons) = pad.row(row, dp(4), 18f)
-            line.addView(rowView, LinearLayout.LayoutParams(0, dp(44), 1f))
-            line.addView(View(this), LinearLayout.LayoutParams(dp(48), 1))
-            extra.addView(line, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(4) })
-            rowButtons
+        fun addRow(container: LinearLayout, row: List<io.github.calcolatrice.ui.PadKey>, top: Int): List<KeyButton> {
+            val (rowView, buttons) = pad.row(row, dp(KEY_SPACING), 18f)
+            container.addView(rowView, LinearLayout.LayoutParams(MATCH_PARENT, dp(44)).apply { topMargin = top })
+            return buttons
         }
+        val firstButtons = addRow(panel, rows.first(), 0)
+        val extra = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val extraButtons = rows.drop(1).map { addRow(extra, it, dp(4)) }
         panel.addView(extra, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+        val expand = pad.button(keys.expandKey(scientificExpanded), 16f)
+        expandButton = expand
+        panel.addView(expand, LinearLayout.LayoutParams(MATCH_PARENT, dp(28)))
         scientificExtraRows = extra
         scientificButtons = listOf(firstButtons) + extraButtons
         return panel
@@ -794,6 +783,9 @@ class MainActivity : Activity() {
         const val ACTION_FUNCTIONS = "io.github.calcolatrice.action.FUNCTIONS"
 
         private const val CURSOR = "|"
+
+        /** Spazio tra i tasti in verticale, uguale nel pannello scientifico e nel tastierino. */
+        private const val KEY_SPACING = 8
         private const val PREF_ANGLE = "angle_unit"
         private const val PREF_HISTORY = "history"
         private const val PREF_STATE = "state"

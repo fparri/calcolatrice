@@ -186,7 +186,8 @@ minimo (se a > 0) o di massimo (se a < 0).
 Con **Diseq.** risolvi disequazioni del tipo ax² + bx + c > 0 (con a = 0 sono di primo grado).
 
 - Tocca il **segno** a destra della riga per cambiarlo: >, ≥, <, ≤.
-- La **seconda riga è facoltativa**: se la compili, ottieni le soluzioni comuni alle due disequazioni (sistema).
+- La **seconda riga è facoltativa** (finché è vuota resta in disparte): se la compili, ottieni le soluzioni
+  comuni alle due disequazioni (sistema).
 - Le soluzioni compaiono come a scuola, per esempio `x < −1 ∨ x > 3`, `−√2 < x < √2` o `x ≠ 2`,
   e sotto come intervalli: `]−∞; −1[ ∪ ]3; +∞[`.
 
@@ -221,6 +222,7 @@ In alto scrivi la funzione `f(x) =` usando il tasto **X**. Sotto scegli una dell
 | **Analisi** | Scrivi x₀, a e b, poi premi **=**: ottieni f(x₀), la derivata f′(x₀), l'integrale da a a b e gli zeri di f tra a e b. |
 
 - Il tasto **DEG/RAD** in alto sceglie gradi o radianti; per i grafici delle funzioni goniometriche si usano di solito i radianti.
+- Il tasto **a/b** in alto mostra i risultati in forma esatta: ∫₀¹ (x² + x + 3) dx = `23/6`, zeri come `√2`.
 - **◀** e **▶** passano da una casella all'altra; **AC** cancella la casella, tenendolo premuto ricominci da capo.
 - La derivata è calcolata numericamente: dove la funzione ha uno spigolo (come |x| in 0) compare "non derivabile".
 - Gli integrali funzionano anche con estremi difficili, come ∫₀¹ 1/√x dx = 2. Se l'integrale non esiste

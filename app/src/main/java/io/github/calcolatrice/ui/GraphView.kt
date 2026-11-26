@@ -44,6 +44,9 @@ class GraphView(context: Context, private val palette: Palette) : View(context) 
             invalidate()
         }
 
+    /** Breve suggerimento mostrato in alto finché non si tocca il grafico. */
+    var hint: String = ""
+
     /** Separatore decimale per le etichette degli assi. */
     var decimalSeparator: Char = '.'
 
@@ -56,6 +59,7 @@ class GraphView(context: Context, private val palette: Palette) : View(context) 
     private var yMax = 10.0
     private var fitted = false
     private var traceX: Double? = null
+    private var touched = false
 
     private fun dp(v: Float) = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v, resources.displayMetrics)
     private fun sp(v: Float) = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, v, resources.displayMetrics)
@@ -88,6 +92,10 @@ class GraphView(context: Context, private val palette: Palette) : View(context) 
     private val boxTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = palette.onBackground
         textSize = sp(14f)
+    }
+    private val hintPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = palette.onBackgroundVariant
+        textSize = sp(13f)
     }
     private val messagePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = palette.onBackgroundVariant
@@ -218,6 +226,10 @@ class GraphView(context: Context, private val palette: Palette) : View(context) 
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
         parent?.requestDisallowInterceptTouchEvent(true)
+        if (!touched) {
+            touched = true
+            invalidate()
+        }
         scaler.onTouchEvent(event)
         if (!scaler.isInProgress) gestures.onTouchEvent(event)
         return true
@@ -339,17 +351,31 @@ class GraphView(context: Context, private val palette: Palette) : View(context) 
         const val MAX_LINES = 400
     }
 
+    /** Riquadro in alto a sinistra con un testo su una riga, ridotto se non ci sta. */
+    private fun drawBox(canvas: Canvas, text: String, paint: Paint) {
+        val padding = dp(8f)
+        val available = width - padding * 4
+        val size = paint.textSize
+        val natural = paint.measureText(text)
+        if (natural > available) paint.textSize = size * available / natural
+        val textWidth = paint.measureText(text)
+        box.set(padding, padding, padding * 3 + textWidth, padding * 3 + paint.textSize)
+        canvas.drawRoundRect(box, dp(10f), dp(10f), boxPaint)
+        canvas.drawText(text, padding * 2, padding * 2 + paint.textSize * 0.86f, paint)
+        paint.textSize = size
+    }
+
     private fun drawTrace(canvas: Canvas, f: (Double) -> Double) {
-        val x = traceX ?: return
+        val x = traceX
+        if (x == null) {
+            if (!touched && hint.isNotEmpty()) drawBox(canvas, hint, hintPaint)
+            return
+        }
         val px = toScreenX(x)
         canvas.drawLine(px, 0f, px, height.toFloat(), traceLinePaint)
         val y = f(x)
         if (y.isFinite()) canvas.drawCircle(px, toScreenY(y), dp(5f), tracePaint)
         val text = traceLabel?.invoke(x) ?: return
-        val padding = dp(8f)
-        val textWidth = boxTextPaint.measureText(text)
-        box.set(padding, padding, padding * 3 + textWidth, padding * 3 + sp(14f))
-        canvas.drawRoundRect(box, dp(10f), dp(10f), boxPaint)
-        canvas.drawText(text, padding * 2, padding * 2 + sp(12f), boxTextPaint)
+        drawBox(canvas, text, boxTextPaint)
     }
 }

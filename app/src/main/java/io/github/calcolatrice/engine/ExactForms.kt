@@ -2,6 +2,7 @@ package io.github.calcolatrice.engine
 
 import java.math.BigDecimal
 import java.math.BigInteger
+import java.math.RoundingMode
 
 /** Forma esatta di un risultato, come la mostrano le calcolatrici scolastiche. */
 sealed interface ExactForm {
@@ -75,5 +76,50 @@ object ExactForms {
             f++
         }
         return s to r
+    }
+}
+
+/** Frazione ridotta con denominatore positivo. */
+data class Fraction(val numerator: BigInteger, val denominator: BigInteger)
+
+object Fractions {
+    /** Come sulle calcolatrici: oltre questi limiti il valore resta decimale. */
+    private val MAX_DENOMINATOR = BigInteger.valueOf(1_000_000)
+    private const val MAX_NUMERATOR_DIGITS = 12
+    private val TOLERANCE = BigDecimal("1E-20")
+
+    /**
+     * Riconosce la frazione che corrisponde a [x] (calcolato a 34 cifre) con le frazioni continue.
+     * Restituisce null se il valore non è razionale con numeri "ragionevoli", per esempio √2 o π.
+     */
+    fun toFraction(x: BigDecimal): Fraction? {
+        if (x.signum() == 0) return Fraction(BigInteger.ZERO, BigInteger.ONE)
+        val target = x.abs()
+        val tolerance = target.max(BigDecimal.ONE).multiply(TOLERANCE)
+        val mc = MathSupport.MC
+        var h1 = BigInteger.ONE
+        var h2 = BigInteger.ZERO
+        var k1 = BigInteger.ZERO
+        var k2 = BigInteger.ONE
+        var y = target
+        repeat(64) {
+            val a = y.setScale(0, RoundingMode.FLOOR).toBigIntegerExact()
+            val h = a * h1 + h2
+            val k = a * k1 + k2
+            if (k > MAX_DENOMINATOR) return null
+            val approximation = BigDecimal(h).divide(BigDecimal(k), mc)
+            if (target.subtract(approximation).abs() <= tolerance) {
+                if (h.toString().length > MAX_NUMERATOR_DIGITS) return null
+                return Fraction(if (x.signum() < 0) h.negate() else h, k)
+            }
+            val rest = y.subtract(BigDecimal(a))
+            if (rest.signum() == 0) return null
+            y = BigDecimal.ONE.divide(rest, mc)
+            h2 = h1
+            h1 = h
+            k2 = k1
+            k1 = k
+        }
+        return null
     }
 }

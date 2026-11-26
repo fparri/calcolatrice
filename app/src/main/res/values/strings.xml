@@ -185,7 +185,7 @@
     <string name="analysis_no_zeros">none</string>
     <string name="analysis_approximate">≈ approximate value: the integral may not converge</string>
     <string name="not_differentiable">not differentiable</string>
-    <string name="graph_hint">Drag to move, pinch to zoom, double tap to reset, tap to read a point</string>
+    <string name="graph_hint">Tap to read a point · double tap to reset</string>
     <string name="graph_description">Graph of f(x) for x from %1$s to %2$s</string>
     <string name="graph_empty">Write a function of X to see its graph</string>
     <string name="key_variable_x">variable X</string>

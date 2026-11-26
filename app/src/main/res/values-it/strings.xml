@@ -167,7 +167,7 @@
     <string name="analysis_no_zeros">nessuno</string>
     <string name="analysis_approximate">≈ valore approssimato: l\'integrale potrebbe non convergere</string>
     <string name="not_differentiable">non derivabile</string>
-    <string name="graph_hint">Trascina per spostarti, avvicina due dita per ingrandire, doppio tocco per ricominciare, tocca per leggere un punto</string>
+    <string name="graph_hint">Tocca per leggere un punto · doppio tocco per ricentrare</string>
     <string name="graph_description">Grafico di f(x) per x da %1$s a %2$s</string>
     <string name="graph_empty">Scrivi una funzione di X per vederne il grafico</string>
     <string name="key_variable_x">variabile X</string>

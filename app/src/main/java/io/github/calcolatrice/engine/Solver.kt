@@ -49,19 +49,19 @@ object NumericSolver {
         unknown: Char = 'X',
         start: BigDecimal = BigDecimal.ZERO,
     ): EvalResult {
-        val tokens = try {
-            Tokenizer.tokenize(expression)
+        val root = try {
+            ExpressionParser.parse(expression)
         } catch (e: CalcException) {
             return EvalResult.Failure(e.error)
         }
-        if (tokens.none { it is Token.Variable && it.name == unknown }) return EvalResult.Failure(CalcError.NO_SOLUTION)
+        if (!root.uses(unknown)) return EvalResult.Failure(CalcError.NO_SOLUTION)
 
-        // f(x) = valore dell'espressione; null fuori dal dominio. Gli errori di sintassi fermano tutto.
+        // f(x) = valore dell'espressione; null fuori dal dominio. Ans mancante (errore di sintassi) ferma tutto.
         val sample: (BigDecimal) -> Sample? = { x ->
             try {
-                val parser = Parser(tokens, angleUnit, ans, variables + (unknown to x))
-                val value = parser.parse()
-                Sample(value, parser.magnitude.max(value.abs()))
+                val evaluation = Evaluation(angleUnit, ans, variables + (unknown to x))
+                val value = evaluation.result(root)
+                Sample(value, evaluation.magnitude.max(value.abs()))
             } catch (e: CalcException) {
                 if (e.error == CalcError.SYNTAX) throw e
                 null

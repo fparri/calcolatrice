@@ -1,6 +1,8 @@
 package io.github.calcolatrice.ui
 
 import android.app.Activity
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.res.ColorStateList
 import android.content.res.Configuration
@@ -11,6 +13,7 @@ import android.graphics.drawable.RippleDrawable
 import android.os.Build
 import android.view.View
 import android.view.WindowInsets
+import android.widget.Toast
 import io.github.calcolatrice.R
 import io.github.calcolatrice.engine.CalcError
 import kotlin.math.max
@@ -87,6 +90,15 @@ fun Context.localFunctionNames(): Map<String, String> = mapOf(
     "gcd" to getString(R.string.fn_gcd),
     "lcm" to getString(R.string.fn_lcm),
 )
+
+/** Copia [text] negli appunti; prima di Android 13 conferma con un messaggio (dopo lo fa il sistema). */
+fun Activity.copyText(label: String, text: CharSequence) {
+    val clipboard = getSystemService(ClipboardManager::class.java) ?: return
+    clipboard.setPrimaryClip(ClipData.newPlainText(label, text))
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+        Toast.makeText(this, R.string.copied, Toast.LENGTH_SHORT).show()
+    }
+}
 
 /** Messaggio da mostrare per un errore di calcolo. */
 fun errorMessage(error: CalcError): Int = when (error) {

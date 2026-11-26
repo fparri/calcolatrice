@@ -1,8 +1,6 @@
 package io.github.calcolatrice.engine
 
 import java.math.BigDecimal
-import java.math.BigInteger
-import java.math.RoundingMode
 
 /** Soluzione di un sistema lineare (o di un'equazione di primo grado). */
 sealed interface LinearSolution {
@@ -289,97 +287,5 @@ object CubicEquation {
             }
         }
         return newton(a, b, c, d, low.add(high, mc).divide(TWO, mc))
-    }
-}
-
-/** Frazione ridotta con denominatore positivo. */
-data class Fraction(val numerator: BigInteger, val denominator: BigInteger)
-
-object Fractions {
-    /** Come sulle calcolatrici: oltre questi limiti il valore resta decimale. */
-    private val MAX_DENOMINATOR = BigInteger.valueOf(1_000_000)
-    private const val MAX_NUMERATOR_DIGITS = 12
-    private val TOLERANCE = BigDecimal("1E-20")
-
-    /**
-     * Riconosce la frazione che corrisponde a [x] (calcolato a 34 cifre) con le frazioni continue.
-     * Restituisce null se il valore non è razionale con numeri "ragionevoli", per esempio √2 o π.
-     */
-    fun toFraction(x: BigDecimal): Fraction? {
-        if (x.signum() == 0) return Fraction(BigInteger.ZERO, BigInteger.ONE)
-        val target = x.abs()
-        val tolerance = target.max(BigDecimal.ONE).multiply(TOLERANCE)
-        val mc = MathSupport.MC
-        var h1 = BigInteger.ONE
-        var h2 = BigInteger.ZERO
-        var k1 = BigInteger.ZERO
-        var k2 = BigInteger.ONE
-        var y = target
-        repeat(64) {
-            val a = y.setScale(0, RoundingMode.FLOOR).toBigIntegerExact()
-            val h = a * h1 + h2
-            val k = a * k1 + k2
-            if (k > MAX_DENOMINATOR) return null
-            val approximation = BigDecimal(h).divide(BigDecimal(k), mc)
-            if (target.subtract(approximation).abs() <= tolerance) {
-                if (h.toString().length > MAX_NUMERATOR_DIGITS) return null
-                return Fraction(if (x.signum() < 0) h.negate() else h, k)
-            }
-            val rest = y.subtract(BigDecimal(a))
-            if (rest.signum() == 0) return null
-            y = BigDecimal.ONE.divide(rest, mc)
-            h2 = h1
-            h1 = h
-            k2 = k1
-            k1 = k
-        }
-        return null
-    }
-}
-
-/**
- * Testo dei risultati: in forma esatta (frazione, radicale, multiplo di π) oppure come decimale
- * nel [format] scelto. I numeri interi restano sempre nel formato scelto.
- */
-class SolutionFormatter(
-    private val display: DisplayFormatter,
-    private val format: NumberFormat = NumberFormat.Normal,
-) {
-
-    /** @param asFraction true per la forma esatta (tasto a/b), se il valore ne ha una. */
-    fun value(x: BigDecimal, asFraction: Boolean): String {
-        if (asFraction) exact(x)?.let { return it }
-        return display.format(ResultFormatter.format(x, format))
-    }
-
-    /** La forma esatta di [x] (es. "√3/2", "−3π/4", "11/12"), oppure null per gli interi e i valori senza forma esatta. */
-    fun exact(x: BigDecimal): String? = when (val form = ExactForms.recognize(x)) {
-        is ExactForm.Rational -> if (form.value.denominator == BigInteger.ONE) null else ratio(form.value.numerator, "", form.value.denominator)
-        is ExactForm.Radical -> ratio(form.coefficient.numerator, "√${display.format(form.radicand.toString())}", form.coefficient.denominator)
-        is ExactForm.PiMultiple -> ratio(form.coefficient.numerator, "π", form.coefficient.denominator)
-        null -> null
-    }
-
-    /** p·simbolo/q, scritto come a scuola: "√3/2", "2√2", "−π", "3π/4". */
-    private fun ratio(numerator: BigInteger, symbol: String, denominator: BigInteger): String {
-        val sign = if (numerator.signum() < 0) "−" else ""
-        val magnitude = numerator.abs()
-        val coefficient = if (symbol.isNotEmpty() && magnitude == BigInteger.ONE) "" else display.format(magnitude.toString())
-        val top = sign + coefficient + symbol
-        return if (denominator == BigInteger.ONE) top else top + "/" + display.format(denominator.toString())
-    }
-
-    /** `re + im·i` oppure `re − im·i`. */
-    fun complex(re: BigDecimal, im: BigDecimal, plus: Boolean, asFraction: Boolean): String {
-        val imText = value(im, asFraction)
-        val imaginary = when {
-            imText == "1" -> "i"
-            '/' in imText -> "($imText)i"
-            // i√3 e 2i√3: la i prima della radice, per non leggere √(3i).
-            '√' in imText -> imText.replace("√", "i√")
-            else -> imText + "i"
-        }
-        if (re.signum() == 0) return if (plus) imaginary else "−$imaginary"
-        return value(re, asFraction) + (if (plus) " + " else " − ") + imaginary
     }
 }

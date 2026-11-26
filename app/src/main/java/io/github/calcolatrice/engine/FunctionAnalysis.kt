@@ -11,10 +11,11 @@ class UserFunction(
     val angleUnit: AngleUnit,
     val variables: Map<Char, BigDecimal> = emptyMap(),
 ) {
-    private val tokens: List<Token> = Tokenizer.tokenize(expression)
+    /** L'espressione analizzata una volta sola: ogni valutazione percorre solo l'albero. */
+    private val root: Expr = ExpressionParser.parse(expression)
 
     /** f(x); lancia [CalcException] fuori dal dominio. */
-    fun at(x: BigDecimal): BigDecimal = Parser(tokens, angleUnit, null, variables + ('X' to x)).parse()
+    fun at(x: BigDecimal): BigDecimal = Evaluation(angleUnit, null, variables + ('X' to x)).result(root)
 
     fun atOrNull(x: BigDecimal): BigDecimal? = try {
         at(x)
@@ -33,7 +34,7 @@ class UserFunction(
     }
 
     /** La stessa funzione in double, per i grafici e per cercare dove f cambia segno. */
-    fun fast(): (Double) -> Double = FastEval.compile(expression, angleUnit, variables) ?: { Double.NaN }
+    fun fast(): (Double) -> Double = FastEval.compile(root, angleUnit, variables)
 }
 
 /** Integrale definito; [approximate] se l'integrazione adattiva non ha raggiunto la precisione piena. */

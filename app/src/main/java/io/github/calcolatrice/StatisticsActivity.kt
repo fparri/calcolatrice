@@ -1,16 +1,10 @@
 package io.github.calcolatrice
 
-import android.app.Activity
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.SharedPreferences
 import android.graphics.Typeface
-import android.os.Build
 import android.os.Bundle
 import android.text.TextUtils
 import android.util.TypedValue
 import android.view.Gravity
-import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
@@ -18,53 +12,34 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
-import android.widget.Toast
 import io.github.calcolatrice.engine.CalcKey
-import io.github.calcolatrice.engine.DisplayFormatter
 import io.github.calcolatrice.engine.OneVariableStats
 import io.github.calcolatrice.engine.RegressionStats
-import io.github.calcolatrice.engine.SolutionFormatter
 import io.github.calcolatrice.engine.StatMode
 import io.github.calcolatrice.engine.StatOutcome
 import io.github.calcolatrice.engine.StatisticsSheet
-import io.github.calcolatrice.ui.HardwareKeys
 import io.github.calcolatrice.ui.KeyButton
-import io.github.calcolatrice.ui.KeyFactory
-import io.github.calcolatrice.ui.KeyPad
 import io.github.calcolatrice.ui.NamedValue
 import io.github.calcolatrice.ui.PadAction
-import io.github.calcolatrice.ui.Palette
-import io.github.calcolatrice.ui.Settings
 import io.github.calcolatrice.ui.SheetCommand
 import io.github.calcolatrice.ui.cellBackground
 import io.github.calcolatrice.ui.dp
 import io.github.calcolatrice.ui.errorMessage
-import io.github.calcolatrice.ui.localFunctionNames
-import io.github.calcolatrice.ui.padForSystemBars
-import io.github.calcolatrice.ui.roundedDrawable
-import io.github.calcolatrice.ui.setupEdgeToEdge
 import io.github.calcolatrice.ui.showSaveToVariable
 import org.json.JSONArray
 import org.json.JSONObject
 import java.math.BigDecimal
-import java.text.DecimalFormatSymbols
 
 /**
  * Statistica come la modalità STAT delle calcolatrici: una colonna di dati (media, deviazione
  * standard, quartili…) oppure coppie (x, y) per la retta di regressione. Solo View di sistema.
  */
-class StatisticsActivity : Activity() {
+class StatisticsActivity : SheetActivity() {
 
-    private lateinit var prefs: SharedPreferences
-    private lateinit var settings: Settings
+    override val prefsName = PREFS_NAME
+    override val clipboardLabel = R.string.statistics
+
     private lateinit var sheet: StatisticsSheet
-    private lateinit var palette: Palette
-    private lateinit var keys: KeyFactory
-    private lateinit var pad: KeyPad
-    private lateinit var display: DisplayFormatter
-    private lateinit var solutions: SolutionFormatter
-    private var decimalSeparator = '.'
-    private var landscape = false
 
     /** True dopo "=": al posto della tabella si vedono i risultati, fino al tasto successivo. */
     private var showResults = false
@@ -82,25 +57,11 @@ class StatisticsActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setupEdgeToEdge()
-
-        prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-        settings = Settings(this)
-        palette = Palette(this)
-        keys = KeyFactory(this)
-        pad = KeyPad(this, palette, ::onAction)
-        val symbols = DecimalFormatSymbols.getInstance(resources.configuration.locales[0])
-        decimalSeparator = symbols.decimalSeparator
-        display = DisplayFormatter(symbols.decimalSeparator, symbols.groupingSeparator, localFunctionNames())
-        solutions = SolutionFormatter(display, settings.numberFormat)
-
         sheet = restoreSheet()
         if (prefs.getBoolean(PREF_SOLVED, false)) {
             sheet.solve()
             showResults = true
         }
-        val config = resources.configuration
-        landscape = config.screenWidthDp > config.screenHeightDp
         setContentView(buildContent())
         render()
     }
@@ -112,7 +73,7 @@ class StatisticsActivity : Activity() {
 
     // ---------------------------------------------------------------- azioni
 
-    private fun onAction(action: PadAction) {
+    override fun onAction(action: PadAction) {
         when (action) {
             is PadAction.Input -> sheet.onKey(action.key)
             is PadAction.SetStatMode -> sheet.setMode(action.mode)
@@ -135,33 +96,7 @@ class StatisticsActivity : Activity() {
         render()
     }
 
-    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
-        if (event.isCtrlPressed || event.isMetaPressed) {
-            if (keyCode != KeyEvent.KEYCODE_C) return super.onKeyDown(keyCode, event)
-            copyResults()
-            return true
-        }
-        val action = when (keyCode) {
-            KeyEvent.KEYCODE_TAB -> PadAction.Sheet(
-                if (event.isShiftPressed) SheetCommand.PREVIOUS_CELL else SheetCommand.NEXT_CELL,
-            )
-            KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> PadAction.Input(CalcKey.Equals)
-            KeyEvent.KEYCODE_DEL -> PadAction.Input(CalcKey.Backspace)
-            KeyEvent.KEYCODE_FORWARD_DEL, KeyEvent.KEYCODE_ESCAPE -> PadAction.Input(CalcKey.Clear)
-            else -> HardwareKeys.basic(event.unicodeChar.toChar())?.let { PadAction.Input(it) }
-        } ?: return super.onKeyDown(keyCode, event)
-        onAction(action)
-        return true
-    }
-
-    private fun copyResults() {
-        if (!showResults) return
-        val clipboard = getSystemService(ClipboardManager::class.java) ?: return
-        clipboard.setPrimaryClip(ClipData.newPlainText(getString(R.string.statistics), resultView.text))
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-            Toast.makeText(this, R.string.copied, Toast.LENGTH_SHORT).show()
-        }
-    }
+    override fun resultsText(): CharSequence? = if (showResults) resultView.text else null
 
     // ---------------------------------------------------------------- disegno
 
@@ -273,13 +208,8 @@ class StatisticsActivity : Activity() {
     // ---------------------------------------------------------------- layout
 
     private fun buildContent(): View {
-        val root = FrameLayout(this).apply { setBackgroundColor(palette.background) }
-        val column = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        val width = if (!landscape && resources.configuration.screenWidthDp > 600) dp(600) else MATCH_PARENT
-        root.addView(column, FrameLayout.LayoutParams(width, MATCH_PARENT, Gravity.CENTER_HORIZONTAL))
-
         val editor = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        editor.addView(buildTopBar(), LinearLayout.LayoutParams(MATCH_PARENT, dp(48)))
+        editor.addView(topBar(titleView(getString(R.string.statistics))), LinearLayout.LayoutParams(MATCH_PARENT, dp(48)))
         val (modeRow, buttons) = pad.row(keys.statModes(sheet.mode), dp(8), 15f)
         modeButtons = buttons
         editor.addView(modeRow, LinearLayout.LayoutParams(MATCH_PARENT, dp(40)).apply { topMargin = dp(4) })
@@ -315,51 +245,7 @@ class StatisticsActivity : Activity() {
         }
         editor.addView(messageView, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
 
-        val keypad = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        val tools = FrameLayout(this).apply {
-            background = roundedDrawable(palette.panel, dp(28).toFloat())
-            setPadding(dp(4), dp(4), dp(4), dp(4))
-        }
-        val (toolRow, _) = pad.row(keys.statisticsTools(), dp(4), 18f)
-        tools.addView(toolRow, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
-        keypad.addView(tools, LinearLayout.LayoutParams(MATCH_PARENT, dp(52)))
-        val (mainGrid, _) = pad.grid(
-            keys.equationMain(decimalSeparator),
-            dp(if (landscape) 6 else 8),
-            if (landscape) 22f else 28f,
-        )
-        keypad.addView(mainGrid, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f).apply { topMargin = dp(10) })
-
-        if (landscape) {
-            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-            row.addView(editor, LinearLayout.LayoutParams(0, MATCH_PARENT, 1f))
-            row.addView(keypad, LinearLayout.LayoutParams(0, MATCH_PARENT, 1f).apply { marginStart = dp(16) })
-            column.addView(row, LinearLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
-        } else {
-            column.addView(editor, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f))
-            column.addView(keypad, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f).apply { topMargin = dp(8) })
-        }
-        root.padForSystemBars(dp(16), dp(8))
-        return root
-    }
-
-    private fun buildTopBar(): View {
-        val bar = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        bar.addView(pad.button(keys.backKey(), 16f), LinearLayout.LayoutParams(dp(48), dp(48)))
-        val title = TextView(this).apply {
-            setText(R.string.statistics)
-            textSize = 20f
-            setTextColor(palette.onBackground)
-            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-            setPadding(dp(8), 0, dp(8), 0)
-            maxLines = 1
-            ellipsize = TextUtils.TruncateAt.END
-        }
-        bar.addView(title, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
-        return bar
+        return scaffold(editor, keypad(listOf(keys.statisticsTools()), keys.equationMain(decimalSeparator)), EDITOR_WEIGHT)
     }
 
     /** Tabella: intestazione, poi una riga per dato più la riga vuota per aggiungerne. */
@@ -462,6 +348,9 @@ class StatisticsActivity : Activity() {
         const val PREF_SHEET = "sheet"
         const val PREF_SOLVED = "solved"
         const val INDEX_WIDTH = 32
+
+        /** In verticale tabella e risultati hanno un po' più spazio della tastiera. */
+        const val EDITOR_WEIGHT = 1.15f
         const val MAX_MODES = 5
     }
 }

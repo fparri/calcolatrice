@@ -19,22 +19,24 @@ app/src/main/java/io/github/calcolatrice/
 ├── MainActivity.kt                Calcolatrice: display con cursore, menu, variabili, cronologia, salvataggio
 ├── EquationActivity.kt            Equazioni, sistemi e disequazioni: tabella dei coefficienti e risultati
 ├── FunctionActivity.kt            Funzioni e grafici: tabella dei valori, grafico, analisi
+├── SheetActivity.kt               Base delle tre schermate con caselle: impostazione, layout, strumenti, copia, tastiera fisica
 ├── StatisticsActivity.kt          Statistica: tabella dei dati e risultati
 ├── engine/                        Motore di calcolo (Kotlin puro, senza Android)
-│   ├── Evaluator.kt               Tokenizer, parser ed esecuzione delle espressioni, variabili
+│   ├── Evaluator.kt               Tokenizer, albero dell'espressione (parser) e valutazione a 34 cifre
+│   ├── MathSupport.kt             Potenze, radici, fattoriale, trigonometria e logaritmi a 34 cifre
 │   ├── BigMath.kt                 exp, ln, sin/cos, atan, √, erfc in BigDecimal a 50 cifre
 │   ├── MoreMath.kt                Menu MATH: radice n-esima, log in base b, nCr, nPr, MCD, mcm, binomiale, normale
-│   ├── ExactForms.kt              Forme esatte dei risultati: p/q, (p/q)·√r, (p/q)·π
+│   ├── ExactForms.kt              Frazioni e forme esatte dei risultati: p/q, (p/q)·√r, (p/q)·π
 │   ├── Inequalities.kt            Disequazioni di 1° e 2° grado, insiemi di intervalli, sistemi, testo delle soluzioni
-│   ├── FastEval.kt                Valutazione in double di f(X) per i grafici, con la stessa grammatica del parser
+│   ├── FastEval.kt                Valutazione in double dello stesso albero, per i grafici
 │   ├── FunctionAnalysis.kt        Derivata, integrale, zeri e tabella di f(X) a 34 cifre
 │   ├── FunctionSheet.kt           Stato della schermata funzioni (caselle, vista, analisi)
 │   ├── TextWindow.kt              Parte di un testo da mostrare su una riga troppo corta
 │   ├── CalculatorEditor.kt        Regole di inserimento dei tasti e cursore
 │   ├── CalculatorSession.kt       Stato della calcolatrice: cronologia, variabili, memoria, SOLVE
 │   ├── Solver.kt                  SOLVE: Newton smorzato, poi ricerca di un cambio di segno
-│   ├── Formatting.kt              Formati NORM/FIX/SCI/ENG, testo per lo schermo, apici, posizioni
-│   ├── Equations.kt               Sistemi lineari, 2° e 3° grado, frazioni, testo dei risultati
+│   ├── Formatting.kt              Formati NORM/FIX/SCI/ENG, testo per lo schermo, apici, posizioni, testo dei risultati
+│   ├── Equations.kt               Sistemi lineari, 2° e 3° grado
 │   ├── EquationSheet.kt           Stato della schermata equazioni (celle, selezione, risultato)
 │   └── Statistics.kt              Statistica a una variabile, regressione, stato della tabella
 └── ui/
@@ -52,7 +54,10 @@ app/src/test/                      Test unitari del motore di calcolo
 
 ### Formato interno delle espressioni
 
-L'editor costruisce un testo che il parser valuta a ogni tasto per l'anteprima:
+L'editor costruisce un testo che `ExpressionParser` trasforma in un albero (`Expr`), valutato a ogni tasto
+per l'anteprima. Le regole (precedenze, percentuali, moltiplicazione implicita) stanno solo nel parser:
+lo stesso albero si valuta a 34 cifre (`Evaluation`) o in double per i grafici (`FastEval`), e SOLVE,
+integrali e tabelle lo analizzano una volta sola. Formato del testo:
 
 - numeri con il punto decimale, eventualmente `1.5E-7`; operatori `+ - * / ^`; postfissi `!` e `%`
 - `π`, `e`, `@` (risultato precedente, a piena precisione), `√` prefisso, funzioni `sin(` `asin(` `ln(` `log(` ecc.
@@ -107,8 +112,8 @@ di ogni tratto; le radici stesse soddisfano solo ≥ e ≤. Il risultato è un i
 
 ### Funzioni e grafici
 
-- **Grafico**: `FastEval` compila l'espressione in funzioni `double` seguendo la stessa grammatica di `Parser`
-  (un test confronta i due motori su molte espressioni). Il grafico campiona un punto per pixel; una curva si spezza
+- **Grafico**: `FastEval` valuta in `double` lo stesso albero usato per il calcolo a 34 cifre
+  (un test confronta i due su molte espressioni). Il grafico campiona un punto per pixel; una curva si spezza
   quando tra due punti vicini c'è un salto grande e il punto di mezzo non sta tra i due (asintoti).
 - **Derivata**: differenze centrali con due passi di estrapolazione di Richardson (errore ~h⁶). Prima si confrontano
   derivata destra e sinistra: se sono diverse la funzione non è derivabile (|x| in 0) e si mostra un errore.
@@ -160,7 +165,7 @@ almeno quanto, si usa quello.
 - Se la derivata numerica risulta zero perché f è enorme rispetto al passo (X − 10²⁵ vicino a 0),
   il passo cresce finché la differenza diventa visibile.
 - Uno zero senza cambio di segno è accettato solo se |f| è al livello del rumore di arrotondamento:
-  10⁻³¹ volte il più grande termine sommato nell'espressione (`Parser.magnitude`). Così `(X − 1)² + 10⁻³⁰`
+  10⁻³¹ volte il più grande termine sommato nell'espressione (`Evaluation.magnitude`). Così `(X − 1)² + 10⁻³⁰`
   non ha soluzioni, mentre `(X − 1)²` e `sin(X) − 1` sì.
 
 ### Statistica

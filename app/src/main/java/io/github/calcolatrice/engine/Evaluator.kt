@@ -1,9 +1,6 @@
 package io.github.calcolatrice.engine
 
 import java.math.BigDecimal
-import java.math.MathContext
-import java.math.RoundingMode
-import kotlin.math.log10
 
 /** Unità di misura degli angoli per le funzioni trigonometriche. */
 enum class AngleUnit { DEGREES, RADIANS }
@@ -49,7 +46,7 @@ fun evaluate(
     ans: BigDecimal? = null,
     variables: Map<Char, BigDecimal> = emptyMap(),
 ): EvalResult = try {
-    EvalResult.Success(Parser(Tokenizer.tokenize(expression), angleUnit, ans, variables).parse())
+    EvalResult.Success(Evaluation(angleUnit, ans, variables).result(ExpressionParser.parse(expression)))
 } catch (e: CalcException) {
     EvalResult.Failure(e.error)
 } catch (e: ArithmeticException) {
@@ -139,324 +136,186 @@ internal object Tokenizer {
     }
 }
 
-internal object MathSupport {
-    /** Precisione dei risultati: 34 cifre significative (come IEEE decimal128). */
-    val MC = MathContext(34, RoundingMode.HALF_EVEN)
+/**
+ * Albero di un'espressione: si costruisce una volta ([ExpressionParser]) e si valuta tante volte,
+ * a 34 cifre ([Evaluation]) o in double per i grafici ([FastEval]). Le regole di precedenza,
+ * delle percentuali e della moltiplicazione implicita stanno solo nel parser.
+ */
+internal sealed interface Expr {
+    data class Num(val value: BigDecimal) : Expr
 
-    /** Oltre 10^MAX_EXPONENT il risultato è considerato troppo grande. */
-    const val MAX_EXPONENT = 9999
+    /** `π`, `e` oppure `@` (risultato precedente). */
+    data class Const(val symbol: Char) : Expr
+    data class Var(val name: Char) : Expr
+    data class Neg(val operand: Expr) : Expr
 
-    val PI = BigDecimal("3.141592653589793238462643383279503")
-    val E = BigDecimal("2.718281828459045235360287471352662")
-    private val DEG_360 = BigDecimal(360)
-
-    /** Oltre questo valore (in radianti) la riduzione dell'angolo perderebbe tutte le cifre. */
-    private val MAX_RADIANS = BigDecimal("1E18")
-
-    /** Residui come sin(π) ≈ 3·10⁻³⁴: π stesso è arrotondato a 34 cifre. */
-    private val TRIG_RESIDUE = BigDecimal("1E-32")
-    private val TAN_POLE = BigDecimal("1E-30")
-
-    /** Esponente decimale di x (posizione della cifra più significativa). */
-    fun exponentOf(x: BigDecimal): Int = x.precision() - x.scale() - 1
-
-    /** log10(|x|) approssimato, per qualunque BigDecimal diverso da zero (serve solo per i controlli). */
-    fun log10Abs(x: BigDecimal): Double {
-        val exp = exponentOf(x)
-        val mantissa = x.abs().movePointLeft(exp).toDouble()
-        return log10(mantissa) + exp
-    }
-
-    /** Controlla che il valore sia in un intervallo gestibile. */
-    fun checked(x: BigDecimal): BigDecimal {
-        if (x.signum() == 0) return BigDecimal.ZERO
-        val exp = exponentOf(x)
-        if (exp > MAX_EXPONENT) throw CalcException(CalcError.OVERFLOW)
-        if (exp < -MAX_EXPONENT) return BigDecimal.ZERO
-        return x
-    }
-
-    fun isInteger(x: BigDecimal): Boolean =
-        x.signum() == 0 || x.stripTrailingZeros().scale() <= 0
-
-    fun sqrt(x: BigDecimal): BigDecimal {
-        if (x.signum() < 0) throw CalcException(CalcError.UNDEFINED)
-        return BigMath.sqrt(x).round(MC).stripTrailingZeros()
-    }
-
-    fun power(base: BigDecimal, exponent: BigDecimal): BigDecimal {
-        if (exponent.signum() == 0) return BigDecimal.ONE
-        if (base.signum() == 0) {
-            if (exponent.signum() < 0) throw CalcException(CalcError.DIVISION_BY_ZERO)
-            return BigDecimal.ZERO
-        }
-        val integerExponent = isInteger(exponent)
-        if (!integerExponent && base.signum() < 0) throw CalcException(CalcError.UNDEFINED)
-
-        // ±1 elevato a qualunque esponente: il controllo con i double sotto darebbe 0·∞ = NaN per esponenti enormi.
-        if (base.abs().compareTo(BigDecimal.ONE) == 0) {
-            val negative = base.signum() < 0 && exponent.toBigInteger().testBit(0)
-            return if (negative) BigDecimal.ONE.negate() else BigDecimal.ONE
-        }
-
-        // Controllo dell'ordine di grandezza prima di calcolare.
-        val magnitude = log10Abs(base) * exponent.toDouble()
-        if (magnitude.isNaN()) throw CalcException(CalcError.UNDEFINED)
-        if (magnitude > MAX_EXPONENT + 1) throw CalcException(CalcError.OVERFLOW)
-        if (magnitude < -MAX_EXPONENT - 1) return BigDecimal.ZERO
-
-        // e^x con la vera esponenziale: la costante e a 34 cifre, elevata a potenza, perderebbe precisione.
-        if (base.compareTo(E) == 0) return checked(BigMath.exp(exponent).round(MC))
-        if (integerExponent && exponent.abs() <= BigDecimal(100_000)) {
-            return checked(base.pow(exponent.intValueExact(), MC))
-        }
-        // x^y = e^(y·ln|x|), col segno giusto per gli esponenti interi dispari.
-        val negative = base.signum() < 0 && exponent.toBigInteger().testBit(0)
-        val value = BigMath.exp(exponent.multiply(BigMath.ln(base.abs()), BigMath.WORK))
-        return checked((if (negative) value.negate() else value).round(MC))
-    }
-
-    fun factorial(x: BigDecimal): BigDecimal {
-        if (x.signum() < 0 || !isInteger(x)) throw CalcException(CalcError.UNDEFINED)
-        if (x > BigDecimal(3248)) throw CalcException(CalcError.OVERFLOW) // 3249! > 10^10000
-        val n = x.intValueExact()
-        var result = BigDecimal.ONE
-        for (i in 2..n) result = result.multiply(BigDecimal(i), MC)
-        return checked(result)
-    }
-
-    /** Riduce un angolo in gradi all'intervallo [0, 360). */
-    private fun normalizeDegrees(x: BigDecimal): BigDecimal {
-        val r = x.remainder(DEG_360)
-        return if (r.signum() < 0) r.add(DEG_360) else r
-    }
-
-    fun trig(name: String, x: BigDecimal, unit: AngleUnit): BigDecimal {
-        val radians: BigDecimal
-        if (unit == AngleUnit.DEGREES) {
-            val angle = normalizeDegrees(x)
-            // Valori esatti per i multipli di 90°.
-            if (isInteger(angle) && angle.toInt() % 90 == 0) {
-                val quadrant = angle.toInt() / 90
-                return when (name) {
-                    "sin" -> intArrayOf(0, 1, 0, -1)[quadrant].toBigDecimal()
-                    "cos" -> intArrayOf(1, 0, -1, 0)[quadrant].toBigDecimal()
-                    else -> if (quadrant % 2 == 1) {
-                        throw CalcException(CalcError.UNDEFINED)
-                    } else {
-                        BigDecimal.ZERO
-                    }
-                }
-            }
-            radians = BigMath.toRadians(angle)
-        } else {
-            if (x.abs() >= MAX_RADIANS) throw CalcException(CalcError.UNDEFINED)
-            radians = x
-        }
-        val (sin, cos) = BigMath.sinCos(radians)
-        val value = when (name) {
-            "sin" -> sin
-            "cos" -> cos
-            else -> {
-                // Multipli dispari di π/2: il coseno è zero a meno dei residui di π.
-                if (cos.abs() < TAN_POLE) throw CalcException(CalcError.UNDEFINED)
-                sin.divide(cos, BigMath.WORK)
-            }
-        }
-        if (radians.abs() >= BigDecimal.ONE && value.abs() < radians.abs().multiply(TRIG_RESIDUE)) {
-            return BigDecimal.ZERO
-        }
-        return value.round(MC)
-    }
-
-    fun inverseTrig(name: String, x: BigDecimal, unit: AngleUnit): BigDecimal {
-        if (name != "atan" && x.abs() > BigDecimal.ONE) throw CalcException(CalcError.UNDEFINED)
-        val radians = when (name) {
-            "asin" -> BigMath.asin(x)
-            "acos" -> BigMath.acos(x)
-            else -> BigMath.atan(x)
-        }
-        val value = if (unit == AngleUnit.DEGREES) BigMath.toDegrees(radians) else radians
-        return value.round(MC)
-    }
-
-    fun logarithm(name: String, x: BigDecimal): BigDecimal {
-        if (x.signum() <= 0) throw CalcException(CalcError.UNDEFINED)
-        val value = if (name == "log") BigMath.log10(x) else BigMath.ln(x)
-        return value.round(MC)
-    }
+    /** a ± b; con [percentOfLeft] b è una percentuale di a (`200 + 10%` = 200 + 200·10/100). */
+    data class Sum(val left: Expr, val right: Expr, val subtract: Boolean, val percentOfLeft: Boolean) : Expr
+    data class Product(val left: Expr, val right: Expr) : Expr
+    data class Quotient(val left: Expr, val right: Expr) : Expr
+    data class Power(val base: Expr, val exponent: Expr) : Expr
+    data class Factorial(val operand: Expr) : Expr
+    data class Percent(val operand: Expr) : Expr
+    data class Sqrt(val operand: Expr) : Expr
+    data class Call(val name: String, val args: List<Expr>) : Expr
 }
 
-internal class Parser(
-    private val tokens: List<Token>,
-    private val angleUnit: AngleUnit,
-    private val ans: BigDecimal?,
-    private val variables: Map<Char, BigDecimal> = emptyMap(),
-) {
-    private var pos = 0
-    private val mc = MathSupport.MC
+/** True se l'espressione contiene la variabile [name] (SOLVE ha bisogno della X). */
+internal fun Expr.uses(name: Char): Boolean = when (this) {
+    is Expr.Var -> this.name == name
+    is Expr.Num, is Expr.Const -> false
+    is Expr.Neg -> operand.uses(name)
+    is Expr.Sum -> left.uses(name) || right.uses(name)
+    is Expr.Product -> left.uses(name) || right.uses(name)
+    is Expr.Quotient -> left.uses(name) || right.uses(name)
+    is Expr.Power -> base.uses(name) || exponent.uses(name)
+    is Expr.Factorial -> operand.uses(name)
+    is Expr.Percent -> operand.uses(name)
+    is Expr.Sqrt -> operand.uses(name)
+    is Expr.Call -> args.any { it.uses(name) }
+}
 
-    /** True se l'ultimo postfisso applicato da [parsePostfix] è `%`. */
+/**
+ * Analisi sintattica (discesa ricorsiva):
+ *
+ *     espressione := termine (('+' | '-') termine)*
+ *     termine     := unario (('*' | '/') unario | unario)*      moltiplicazione implicita
+ *     unario      := ('-' | '+') unario | potenza
+ *     potenza     := postfisso ('^' unario)?                    associativa a destra: 2^3^2 = 2^9
+ *     postfisso   := primario ('!' | '%')*
+ *     primario    := numero | costante | variabile | '(' espressione ')' | funzione | '√' operando
+ *
+ * Le parentesi lasciate aperte vengono chiuse alla fine.
+ */
+internal class ExpressionParser private constructor(private val tokens: List<Token>) {
+    private var pos = 0
+
+    /** True se l'ultimo postfisso letto è `%`. */
     private var postfixWasPercent = false
 
-    /** True se l'ultimo termine letto da [parseTerm] è una percentuale semplice (es. `10%`). */
+    /** True se l'ultimo termine letto è una percentuale semplice (es. `10%`). */
     private var termIsPercent = false
 
-    /**
-     * Il più grande valore assoluto sommato o sottratto durante il calcolo. Dà la scala del rumore
-     * di arrotondamento: un risultato più piccolo di circa 10⁻³² volte questo valore non si distingue da zero.
-     */
-    var magnitude: BigDecimal = BigDecimal.ZERO
-        private set
+    companion object {
+        fun parse(text: String): Expr = parse(Tokenizer.tokenize(text))
 
-    fun parse(): BigDecimal {
-        val value = parseExpression()
-        if (pos != tokens.size) throw CalcException(CalcError.SYNTAX)
-        return MathSupport.checked(value).let {
-            if (it.signum() == 0) BigDecimal.ZERO else it.round(mc).stripTrailingZeros()
+        fun parse(tokens: List<Token>): Expr {
+            val parser = ExpressionParser(tokens)
+            val root = parser.expression()
+            if (parser.pos != tokens.size) throw CalcException(CalcError.SYNTAX)
+            return root
         }
     }
 
     private fun peek(): Token? = tokens.getOrNull(pos)
     private fun next(): Token? = tokens.getOrNull(pos++)
+    private fun isOperator(t: Token?, symbol: Char) = t is Token.Operator && t.symbol == symbol
 
-    // espressione := termine (('+' | '-') termine)*
-    private fun parseExpression(): BigDecimal {
-        var left = parseTerm()
+    private fun expression(): Expr {
+        var left = term()
         while (true) {
             val t = peek()
-            if (t is Token.Operator && (t.symbol == '+' || t.symbol == '-')) {
-                pos++
-                var right = parseTerm()
-                // a ± b% = a ± a·b/100 (sconti e maggiorazioni).
-                if (termIsPercent) right = left.multiply(right, mc)
-                magnitude = magnitude.max(left.abs()).max(right.abs())
-                left = MathSupport.checked(
-                    if (t.symbol == '+') left.add(right, mc) else left.subtract(right, mc),
-                )
-            } else {
-                return left
-            }
+            if (!isOperator(t, '+') && !isOperator(t, '-')) return left
+            pos++
+            val right = term()
+            left = Expr.Sum(left, right, subtract = isOperator(t, '-'), percentOfLeft = termIsPercent)
         }
     }
 
-    // termine := unario (('*' | '/') unario | unario)*   (moltiplicazione implicita)
-    private fun parseTerm(): BigDecimal {
-        var left = parseUnary()
+    private fun term(): Expr {
+        var left = unary()
         var percent = postfixWasPercent
         while (true) {
             val t = peek()
             left = when {
-                t is Token.Operator && t.symbol == '*' -> {
+                isOperator(t, '*') -> {
                     pos++
-                    percent = false
-                    MathSupport.checked(left.multiply(parseUnary(), mc))
+                    Expr.Product(left, unary())
                 }
-                t is Token.Operator && t.symbol == '/' -> {
+                isOperator(t, '/') -> {
                     pos++
-                    percent = false
-                    val divisor = parseUnary()
-                    if (divisor.signum() == 0) throw CalcException(CalcError.DIVISION_BY_ZERO)
-                    MathSupport.checked(left.divide(divisor, mc))
+                    Expr.Quotient(left, unary())
                 }
-                t != null && startsOperand(t) -> {
-                    percent = false
-                    MathSupport.checked(left.multiply(parseUnary(), mc))
-                }
+                t != null && startsOperand(t) -> Expr.Product(left, unary())
                 else -> {
                     termIsPercent = percent
                     return left
                 }
             }
+            percent = false
         }
     }
 
     private fun startsOperand(t: Token) = t is Token.Number || t is Token.Constant || t is Token.Variable ||
         t is Token.Function || t == Token.OpenParen || t == Token.Sqrt
 
-    // unario := ('-' | '+') unario | potenza
-    private fun parseUnary(): BigDecimal {
+    private fun unary(): Expr {
         val t = peek()
-        if (t is Token.Operator && t.symbol == '-') {
+        if (isOperator(t, '-')) {
             pos++
-            return parseUnary().negate()
+            return Expr.Neg(unary())
         }
-        if (t is Token.Operator && t.symbol == '+') {
+        if (isOperator(t, '+')) {
             pos++
-            return parseUnary()
+            return unary()
         }
-        return parsePower()
+        return power()
     }
 
-    // potenza := postfisso ('^' unario)?   (associativa a destra: 2^3^2 = 2^9)
-    private fun parsePower(): BigDecimal {
-        val base = parsePostfix()
-        val t = peek()
-        if (t is Token.Operator && t.symbol == '^') {
-            pos++
-            val result = MathSupport.power(base, parseUnary())
-            postfixWasPercent = false
-            return result
-        }
-        return base
+    private fun power(): Expr {
+        val base = postfix()
+        if (!isOperator(peek(), '^')) return base
+        pos++
+        val exponent = unary()
+        postfixWasPercent = false
+        return Expr.Power(base, exponent)
     }
 
-    // postfisso := primario ('!' | '%')*      primario può essere '√' primario
-    private fun parsePostfix(): BigDecimal {
-        var value = parsePrimary()
+    private fun postfix(): Expr {
+        var value = primary()
         var percent = false
         while (true) {
             val t = peek() as? Token.Postfix ?: break
             pos++
             percent = t.symbol == '%'
-            value = if (t.symbol == '!') {
-                MathSupport.factorial(value)
-            } else {
-                value.divide(BigDecimal(100), mc)
-            }
+            value = if (percent) Expr.Percent(value) else Expr.Factorial(value)
         }
         postfixWasPercent = percent
         return value
     }
 
-    private fun parsePrimary(): BigDecimal = when (val t = next()) {
-        is Token.Number -> t.value
-        is Token.Constant -> when (t.symbol) {
-            'π' -> MathSupport.PI
-            'e' -> MathSupport.E
-            else -> ans ?: throw CalcException(CalcError.SYNTAX)
-        }
-        is Token.Variable -> variables[t.name] ?: BigDecimal.ZERO
-        Token.OpenParen -> parseExpression().also { expectCloseParen() }
+    private fun primary(): Expr = when (val t = next()) {
+        is Token.Number -> Expr.Num(t.value)
+        is Token.Constant -> Expr.Const(t.symbol)
+        is Token.Variable -> Expr.Var(t.name)
+        Token.OpenParen -> expression().also { expectCloseParen() }
         is Token.Function -> {
-            val arguments = mutableListOf(parseExpression())
+            val args = mutableListOf(expression())
             while (peek() == Token.Separator) {
                 pos++
-                arguments += parseExpression()
+                args += expression()
             }
             expectCloseParen()
             val arity = Tokenizer.ARITY.getValue(t.name)
-            if (arguments.size !in arity || (t.name == "normc" && arguments.size == 3)) {
-                throw CalcException(CalcError.SYNTAX)
-            }
-            applyFunction(t.name, arguments)
+            if (args.size !in arity || (t.name == "normc" && args.size == 3)) throw CalcException(CalcError.SYNTAX)
+            Expr.Call(t.name, args)
         }
-        Token.Sqrt -> MathSupport.sqrt(parseSqrtOperand())
+        Token.Sqrt -> Expr.Sqrt(sqrtOperand())
         else -> throw CalcException(CalcError.SYNTAX)
     }
 
     /** Operando di √: solo il numero, la costante o il blocco tra parentesi che lo segue. */
-    private fun parseSqrtOperand(): BigDecimal {
+    private fun sqrtOperand(): Expr {
         val t = peek()
-        if (t is Token.Operator && t.symbol == '-') {
+        if (isOperator(t, '-')) {
             pos++
-            return parseSqrtOperand().negate()
+            return Expr.Neg(sqrtOperand())
         }
-        if (t is Token.Operator && t.symbol == '+') {
+        if (isOperator(t, '+')) {
             pos++
-            return parseSqrtOperand()
+            return sqrtOperand()
         }
-        return parsePrimary()
+        return primary()
     }
 
     /** Accetta ')' oppure la fine dell'espressione (parentesi chiusa automaticamente). */
@@ -467,8 +326,68 @@ internal class Parser(
             else -> throw CalcException(CalcError.SYNTAX)
         }
     }
+}
 
-    private fun applyFunction(name: String, args: List<BigDecimal>): BigDecimal {
+/**
+ * Valutazione a 34 cifre di un [Expr]. Gli errori (divisione per zero, dominio, numeri troppo grandi)
+ * escono come [CalcException].
+ */
+internal class Evaluation(
+    private val angleUnit: AngleUnit,
+    private val ans: BigDecimal?,
+    private val variables: Map<Char, BigDecimal> = emptyMap(),
+) {
+    private val mc = MathSupport.MC
+
+    /**
+     * Il più grande valore assoluto sommato o sottratto durante il calcolo. Dà la scala del rumore
+     * di arrotondamento: un risultato più piccolo di circa 10⁻³² volte questo valore non si distingue da zero.
+     */
+    var magnitude: BigDecimal = BigDecimal.ZERO
+        private set
+
+    /** Il risultato finale: controllato e arrotondato a 34 cifre. */
+    fun result(root: Expr): BigDecimal = MathSupport.checked(value(root)).let {
+        if (it.signum() == 0) BigDecimal.ZERO else it.round(mc).stripTrailingZeros()
+    }
+
+    fun value(e: Expr): BigDecimal = when (e) {
+        is Expr.Num -> e.value
+        is Expr.Const -> when (e.symbol) {
+            'π' -> MathSupport.PI
+            'e' -> MathSupport.E
+            else -> ans ?: throw CalcException(CalcError.SYNTAX)
+        }
+        is Expr.Var -> variables[e.name] ?: BigDecimal.ZERO
+        is Expr.Neg -> value(e.operand).negate()
+        is Expr.Sum -> {
+            val left = value(e.left)
+            var right = value(e.right)
+            if (e.percentOfLeft) right = left.multiply(right, mc)
+            magnitude = magnitude.max(left.abs()).max(right.abs())
+            MathSupport.checked(if (e.subtract) left.subtract(right, mc) else left.add(right, mc))
+        }
+        is Expr.Product -> {
+            val left = value(e.left)
+            MathSupport.checked(left.multiply(value(e.right), mc))
+        }
+        is Expr.Quotient -> {
+            val left = value(e.left)
+            val divisor = value(e.right)
+            if (divisor.signum() == 0) throw CalcException(CalcError.DIVISION_BY_ZERO)
+            MathSupport.checked(left.divide(divisor, mc))
+        }
+        is Expr.Power -> {
+            val base = value(e.base)
+            MathSupport.power(base, value(e.exponent))
+        }
+        is Expr.Factorial -> MathSupport.factorial(value(e.operand))
+        is Expr.Percent -> value(e.operand).divide(BigDecimal(100), mc)
+        is Expr.Sqrt -> MathSupport.sqrt(value(e.operand))
+        is Expr.Call -> call(e.name, e.args.map(::value))
+    }
+
+    private fun call(name: String, args: List<BigDecimal>): BigDecimal {
         val x = args[0]
         return when (name) {
             "sin", "cos", "tan" -> MathSupport.trig(name, x, angleUnit)

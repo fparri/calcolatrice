@@ -1,15 +1,9 @@
 package io.github.calcolatrice
 
-import android.app.Activity
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.SharedPreferences
 import android.graphics.Typeface
-import android.os.Build
 import android.os.Bundle
 import android.text.TextUtils
 import android.view.Gravity
-import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
@@ -17,65 +11,48 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
-import android.widget.Toast
 import io.github.calcolatrice.engine.AnalysisItem
 import io.github.calcolatrice.engine.AngleUnit
 import io.github.calcolatrice.engine.CalcError
 import io.github.calcolatrice.engine.CalcException
 import io.github.calcolatrice.engine.CalcKey
-import io.github.calcolatrice.engine.DisplayFormatter
 import io.github.calcolatrice.engine.EvalResult
 import io.github.calcolatrice.engine.FunctionAnalysisResult
 import io.github.calcolatrice.engine.FunctionCell
 import io.github.calcolatrice.engine.FunctionSheet
 import io.github.calcolatrice.engine.FunctionTab
 import io.github.calcolatrice.engine.ResultFormatter
-import io.github.calcolatrice.engine.SolutionFormatter
 import io.github.calcolatrice.engine.UserFunction
 import io.github.calcolatrice.ui.FitTextView
 import io.github.calcolatrice.ui.GraphView
 import io.github.calcolatrice.ui.HardwareKeys
 import io.github.calcolatrice.ui.KeyButton
-import io.github.calcolatrice.ui.KeyFactory
-import io.github.calcolatrice.ui.KeyPad
 import io.github.calcolatrice.ui.MathEntry
 import io.github.calcolatrice.ui.NamedValue
 import io.github.calcolatrice.ui.PadAction
-import io.github.calcolatrice.ui.Palette
-import io.github.calcolatrice.ui.Settings
 import io.github.calcolatrice.ui.SheetCommand
 import io.github.calcolatrice.ui.cellBackground
 import io.github.calcolatrice.ui.dp
 import io.github.calcolatrice.ui.errorMessage
-import io.github.calcolatrice.ui.localFunctionNames
 import io.github.calcolatrice.ui.mathEntries
-import io.github.calcolatrice.ui.padForSystemBars
 import io.github.calcolatrice.ui.roundedDrawable
-import io.github.calcolatrice.ui.setupEdgeToEdge
 import io.github.calcolatrice.ui.showMathMenu
 import io.github.calcolatrice.ui.showSaveToVariable
 import org.json.JSONObject
 import java.math.BigDecimal
 import java.math.MathContext
 import java.math.RoundingMode
-import java.text.DecimalFormatSymbols
 
 /**
  * Funzioni e grafici: si scrive f(X) e si sceglie tra tabella dei valori, grafico e analisi
  * (valore e derivata in un punto, integrale definito, zeri in un intervallo). Solo View di sistema.
  */
-class FunctionActivity : Activity() {
+class FunctionActivity : SheetActivity() {
 
-    private lateinit var prefs: SharedPreferences
-    private lateinit var settings: Settings
+    override val prefsName = PREFS_NAME
+    override val clipboardLabel = R.string.functions
+
     private lateinit var sheet: FunctionSheet
-    private lateinit var palette: Palette
-    private lateinit var keys: KeyFactory
-    private lateinit var pad: KeyPad
-    private lateinit var display: DisplayFormatter
-    private lateinit var solutions: SolutionFormatter
-    private var decimalSeparator = '.'
-    private var landscape = false
 
     private var tabButtons: List<KeyButton> = emptyList()
     private lateinit var angleButton: KeyButton
@@ -102,27 +79,18 @@ class FunctionActivity : Activity() {
     private var generation = 0
     private var storable: List<NamedValue> = emptyList()
 
+    /** Risultati in forma esatta (frazioni, radici, π), come nelle equazioni. */
+    private var asFraction = true
+    private lateinit var fractionButton: KeyButton
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setupEdgeToEdge()
-
-        prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-        settings = Settings(this)
-        palette = Palette(this)
-        keys = KeyFactory(this)
-        pad = KeyPad(this, palette, ::onAction)
-        val symbols = DecimalFormatSymbols.getInstance(resources.configuration.locales[0])
-        decimalSeparator = symbols.decimalSeparator
-        display = DisplayFormatter(symbols.decimalSeparator, symbols.groupingSeparator, localFunctionNames())
-        solutions = SolutionFormatter(display, settings.numberFormat)
-
         sheet = restoreSheet()
+        asFraction = prefs.getBoolean(PREF_FRACTION, true)
         savedInstanceState?.getString(KEY_SELECTED)
             ?.let { name -> FunctionCell.entries.firstOrNull { it.name == name } }
             ?.let { sheet.select(it) }
 
-        val config = resources.configuration
-        landscape = config.screenWidthDp > config.screenHeightDp
         setContentView(buildContent())
         render()
     }
@@ -144,7 +112,7 @@ class FunctionActivity : Activity() {
 
     // ---------------------------------------------------------------- azioni
 
-    private fun onAction(action: PadAction) {
+    override fun onAction(action: PadAction) {
         when (action) {
             is PadAction.Input -> if (action.key == CalcKey.Equals) {
                 if (sheet.tab == FunctionTab.ANALYSIS) runAnalysis()
@@ -165,6 +133,10 @@ class FunctionActivity : Activity() {
             PadAction.ToggleAngle -> {
                 sheet.angleUnit = if (sheet.angleUnit == AngleUnit.DEGREES) AngleUnit.RADIANS else AngleUnit.DEGREES
                 invalidateAnalysis()
+            }
+            PadAction.ToggleFraction -> {
+                asFraction = !asFraction
+                prefs.edit().putBoolean(PREF_FRACTION, asFraction).apply()
             }
             PadAction.ShowMath -> showMathMenu(mathMenu(), palette) { onAction(PadAction.Input(it)) }
             PadAction.Back -> {
@@ -221,27 +193,8 @@ class FunctionActivity : Activity() {
         }.start()
     }
 
-    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
-        if (event.isCtrlPressed || event.isMetaPressed) {
-            if (keyCode != KeyEvent.KEYCODE_C) return super.onKeyDown(keyCode, event)
-            copyResults()
-            return true
-        }
-        val action = when (keyCode) {
-            KeyEvent.KEYCODE_TAB -> PadAction.Sheet(
-                if (event.isShiftPressed) SheetCommand.PREVIOUS_CELL else SheetCommand.NEXT_CELL,
-            )
-            KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> PadAction.Input(CalcKey.Equals)
-            KeyEvent.KEYCODE_DEL -> PadAction.Input(CalcKey.Backspace)
-            KeyEvent.KEYCODE_FORWARD_DEL, KeyEvent.KEYCODE_ESCAPE -> PadAction.Input(CalcKey.Clear)
-            else -> hardwareKey(event.unicodeChar.toChar())?.let { PadAction.Input(it) }
-        } ?: return super.onKeyDown(keyCode, event)
-        onAction(action)
-        return true
-    }
-
     /** Qui la x è la variabile (per moltiplicare si usa *). */
-    private fun hardwareKey(c: Char): CalcKey? = when (c) {
+    override fun characterKey(c: Char): CalcKey? = when (c) {
         'x', 'X' -> CalcKey.Variable('X')
         's' -> CalcKey.Function("sin")
         'c' -> CalcKey.Function("cos")
@@ -253,19 +206,11 @@ class FunctionActivity : Activity() {
         else -> HardwareKeys.basic(c)
     }
 
-    private fun copyResults() {
-        val text = when (sheet.tab) {
-            FunctionTab.ANALYSIS -> analysisView.text
-            FunctionTab.TABLE -> tableRows.filter { (x, _) -> x.visibility == View.VISIBLE }
-                .joinToString("\n") { (x, y) -> "${x.text}\t${y.text}" }
-            FunctionTab.GRAPH -> return
-        }
-        if (text.isEmpty()) return
-        val clipboard = getSystemService(ClipboardManager::class.java) ?: return
-        clipboard.setPrimaryClip(ClipData.newPlainText(getString(R.string.functions), text))
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-            Toast.makeText(this, R.string.copied, Toast.LENGTH_SHORT).show()
-        }
+    override fun resultsText(): CharSequence? = when (sheet.tab) {
+        FunctionTab.ANALYSIS -> analysisView.text
+        FunctionTab.TABLE -> tableRows.filter { (x, _) -> x.visibility == View.VISIBLE }
+            .joinToString("\n") { (x, y) -> "${x.text}\t${y.text}" }
+        FunctionTab.GRAPH -> null
     }
 
     // ---------------------------------------------------------------- disegno
@@ -274,6 +219,7 @@ class FunctionActivity : Activity() {
         val tab = sheet.tab
         tabButtons.zip(keys.functionTabs(tab)).forEach { (button, key) -> if (button.key != key) button.bind(key, palette) }
         keys.angleToggle(sheet.angleUnit).let { if (angleButton.key != it) angleButton.bind(it, palette) }
+        keys.fractionKey(asFraction).let { if (fractionButton.key != it) fractionButton.bind(it, palette) }
 
         val expression = sheet.expression
         val valid = expression.isNotEmpty() && sheet.function().isSuccess
@@ -315,6 +261,9 @@ class FunctionActivity : Activity() {
 
     private fun number(x: BigDecimal) = solutions.value(x, asFraction = false)
 
+    /** Un risultato: in forma esatta se a/b è attivo e il valore ne ha una. */
+    private fun result(x: BigDecimal, approximate: Boolean = false) = solutions.value(x, asFraction && !approximate)
+
     private fun failureText(error: Throwable?): String =
         if (sheet.expression.isEmpty()) {
             getString(R.string.function_hint)
@@ -340,7 +289,7 @@ class FunctionActivity : Activity() {
             xView.text = number(x)
             when (y) {
                 is EvalResult.Success -> {
-                    yView.text = number(y.value)
+                    yView.text = result(y.value)
                     yView.setTextColor(palette.onBackground)
                 }
                 is EvalResult.Failure -> {
@@ -398,7 +347,7 @@ class FunctionActivity : Activity() {
         fun add(name: String, item: AnalysisItem, undefinedText: String? = null) {
             when (item) {
                 is AnalysisItem.Value -> {
-                    val text = (if (item.approximate) "≈ " else "") + number(item.value)
+                    val text = (if (item.approximate) "≈ " else "") + result(item.value, item.approximate)
                     lines += "$name = $text"
                     values += NamedValue("$name = $text", item.value)
                 }
@@ -415,13 +364,13 @@ class FunctionActivity : Activity() {
         when (val zeros = r.zeros) {
             is AnalysisItem.Values -> {
                 lines += ""
-                lines += getString(R.string.analysis_zeros) + ":"
                 if (zeros.values.isEmpty()) {
-                    lines += getString(R.string.analysis_no_zeros)
+                    lines += getString(R.string.analysis_zeros) + ": " + getString(R.string.analysis_no_zeros)
                 } else {
+                    lines += getString(R.string.analysis_zeros) + ":"
                     zeros.values.forEach { x ->
-                        lines += "x = ${number(x)}"
-                        values += NamedValue("x = ${number(x)}", x)
+                        lines += "x = ${result(x)}"
+                        values += NamedValue("x = ${result(x)}", x)
                     }
                 }
             }
@@ -439,17 +388,17 @@ class FunctionActivity : Activity() {
     // ---------------------------------------------------------------- layout
 
     private fun buildContent(): View {
-        val root = FrameLayout(this).apply { setBackgroundColor(palette.background) }
-        val column = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        val width = if (!landscape && resources.configuration.screenWidthDp > 600) dp(600) else MATCH_PARENT
-        root.addView(column, FrameLayout.LayoutParams(width, MATCH_PARENT, Gravity.CENTER_HORIZONTAL))
-
         val editor = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        editor.addView(buildTopBar(), LinearLayout.LayoutParams(MATCH_PARENT, dp(48)))
+        angleButton = pad.button(keys.angleToggle(sheet.angleUnit), 15f)
+        fractionButton = pad.button(keys.fractionKey(asFraction), 16f)
+        editor.addView(
+            topBar(titleView(getString(R.string.functions)), fractionButton, angleButton),
+            LinearLayout.LayoutParams(MATCH_PARENT, dp(48)),
+        )
         val (tabRow, buttons) = pad.row(keys.functionTabs(sheet.tab), dp(6), 15f)
         tabButtons = buttons
         editor.addView(tabRow, LinearLayout.LayoutParams(MATCH_PARENT, dp(40)).apply { topMargin = dp(4) })
-        editor.addView(buildExpressionRow(), LinearLayout.LayoutParams(MATCH_PARENT, dp(if (landscape) 48 else 56)).apply { topMargin = dp(8) })
+        editor.addView(buildExpressionRow(), LinearLayout.LayoutParams(MATCH_PARENT, dp(if (landscape) 44 else 48)).apply { topMargin = dp(8) })
 
         val content = FrameLayout(this)
         tableBox = buildTable()
@@ -460,68 +409,18 @@ class FunctionActivity : Activity() {
         content.addView(analysisBox, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         editor.addView(content, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f).apply { topMargin = dp(8) })
 
-        val keypad = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        keypad.addView(toolPanel(keys.functionTools()), LinearLayout.LayoutParams(MATCH_PARENT, dp(48)))
-        keypad.addView(toolPanel(keys.functionTools2()), LinearLayout.LayoutParams(MATCH_PARENT, dp(48)).apply { topMargin = dp(6) })
-        val (mainGrid, _) = pad.grid(
-            keys.functionMain(decimalSeparator),
-            dp(if (landscape) 6 else 8),
-            if (landscape) 22f else 26f,
-        )
-        keypad.addView(mainGrid, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f).apply { topMargin = dp(8) })
-
-        if (landscape) {
-            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-            row.addView(editor, LinearLayout.LayoutParams(0, MATCH_PARENT, 1f))
-            row.addView(keypad, LinearLayout.LayoutParams(0, MATCH_PARENT, 1f).apply { marginStart = dp(16) })
-            column.addView(row, LinearLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
-        } else {
-            column.addView(editor, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1.1f))
-            column.addView(keypad, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f).apply { topMargin = dp(8) })
-        }
-        root.padForSystemBars(dp(16), dp(8))
-        return root
+        val keypad = keypad(listOf(keys.functionTools(), keys.functionTools2()), keys.functionMain(decimalSeparator), 24f)
+        return scaffold(editor, keypad, EDITOR_WEIGHT)
     }
 
-    private fun toolPanel(keyList: List<io.github.calcolatrice.ui.PadKey>): View {
-        val panel = FrameLayout(this).apply {
-            background = roundedDrawable(palette.panel, dp(24).toFloat())
-            setPadding(dp(4), dp(2), dp(4), dp(2))
-        }
-        val (row, _) = pad.row(keyList, dp(4), 17f)
-        panel.addView(row, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
-        return panel
-    }
-
-    private fun buildTopBar(): View {
-        val bar = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        bar.addView(pad.button(keys.backKey(), 16f), LinearLayout.LayoutParams(dp(48), dp(48)))
-        bar.addView(
-            TextView(this).apply {
-                setText(R.string.functions)
-                textSize = 20f
-                setTextColor(palette.onBackground)
-                typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-                setPadding(dp(8), 0, dp(8), 0)
-                maxLines = 1
-                ellipsize = TextUtils.TruncateAt.END
-            },
-            LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f),
-        )
-        angleButton = pad.button(keys.angleToggle(sheet.angleUnit), 15f)
-        bar.addView(angleButton, LinearLayout.LayoutParams(dp(64), dp(40)))
-        return bar
-    }
-
-    private fun label(text: String, italic: Boolean = true) = TextView(this).apply {
+    private fun label(text: String) = TextView(this).apply {
         this.text = text
         textSize = 16f
         gravity = Gravity.CENTER
         setTextColor(palette.onBackgroundVariant)
-        typeface = Typeface.create("serif", if (italic) Typeface.ITALIC else Typeface.NORMAL)
+        // Il serif corsivo non ha i pedici (x₀): lì si usa il carattere di sistema.
+        val family = if (text.any { it in '₀'..'₉' }) "sans-serif" else "serif"
+        typeface = Typeface.create(family, Typeface.ITALIC)
         importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
     }
 
@@ -636,6 +535,7 @@ class FunctionActivity : Activity() {
         graphView = GraphView(this, palette).apply {
             decimalSeparator = this@FunctionActivity.decimalSeparator
             emptyMessage = getString(R.string.graph_empty)
+            hint = getString(R.string.graph_hint)
             traceLabel = ::traceText
             background = roundedDrawable(palette.panel, dp(16).toFloat())
             clipToOutline = true
@@ -649,17 +549,6 @@ class FunctionActivity : Activity() {
             contentDescription = getString(R.string.graph_description, "−10", "10")
         }
         box.addView(graphView, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
-        box.addView(
-            TextView(this).apply {
-                setText(R.string.graph_hint)
-                textSize = 12f
-                gravity = Gravity.CENTER
-                setTextColor(palette.onBackgroundVariant)
-                setPadding(dp(8), dp(4), dp(8), dp(6))
-                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-            },
-            FrameLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT, Gravity.BOTTOM),
-        )
         return box
     }
 
@@ -718,5 +607,9 @@ class FunctionActivity : Activity() {
         const val PREFS_NAME = "functions"
         const val PREF_SHEET = "sheet"
         const val KEY_SELECTED = "selected"
+        const val PREF_FRACTION = "fractions"
+
+        /** In verticale tabella e grafico hanno più spazio della tastiera, che qui ha due righe di strumenti. */
+        const val EDITOR_WEIGHT = 1.45f
     }
 }
