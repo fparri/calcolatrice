@@ -33,6 +33,7 @@ import io.github.calcolatrice.engine.NumberFormat
 import io.github.calcolatrice.engine.ResultFormatter
 import io.github.calcolatrice.engine.SolutionFormatter
 import io.github.calcolatrice.engine.VARIABLES
+import io.github.calcolatrice.ui.stackedFractions
 import io.github.calcolatrice.ui.FitTextView
 import io.github.calcolatrice.ui.HardwareKeys
 import io.github.calcolatrice.ui.KeyButton
@@ -290,7 +291,8 @@ class MainActivity : Activity() {
             showsResult -> {
                 val value = solutions.value(ans, asFraction)
                 windowStart = 0
-                displayText(session.solvedFor?.let { "$it = $value" } ?: value, cursorAt = null)
+                val shown = displayText(session.solvedFor?.let { "$it = $value" } ?: value, cursorAt = null)
+                if (asFraction) stackedFractions(shown) else shown
             }
             calc.expression.isEmpty() -> {
                 windowStart = 0
@@ -315,7 +317,7 @@ class MainActivity : Activity() {
         val preview = session.preview
             ?.let { solutions.value(it, asFraction) }
             ?.takeIf { it != main.toString() }
-        secondaryView.text = error ?: preview ?: ""
+        secondaryView.text = error ?: preview?.let { if (asFraction) stackedFractions(it) else it } ?: ""
         secondaryView.setTextColor(if (error != null) palette.error else palette.onBackgroundVariant)
 
         val degrees = session.angleUnit == AngleUnit.DEGREES
@@ -477,6 +479,8 @@ class MainActivity : Activity() {
             typeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
             gravity = Gravity.END or Gravity.BOTTOM
             includeFontPadding = false
+            // Altezza fissata dal layout: una frazione su due livelli rimpicciolisce il testo se non ci sta.
+            fitsHeight = true
             // Riserva: se il testo superasse comunque la riga, si taglia all'inizio e la fine resta visibile.
             ellipsize = TextUtils.TruncateAt.START
             // Una sola riga: le cifre si rimpiccioliscono fino a questo minimo, ancora ben leggibile.

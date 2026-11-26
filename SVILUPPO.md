@@ -32,6 +32,7 @@ app/src/main/java/io/github/calcolatrice/
 │   ├── FunctionAnalysis.kt        Derivata, integrale, zeri e tabella di f(X) a 34 cifre
 │   ├── FunctionSheet.kt           Stato della schermata funzioni (caselle, vista, analisi)
 │   ├── TextWindow.kt              Parte di un testo da mostrare su una riga troppo corta
+│   ├── FractionText.kt            Posizione delle frazioni nel testo di un risultato esatto
 │   ├── CalculatorEditor.kt        Regole di inserimento dei tasti e cursore
 │   ├── CalculatorSession.kt       Stato della calcolatrice: cronologia, variabili, memoria, SOLVE
 │   ├── Solver.kt                  SOLVE: Newton smorzato, poi ricerca di un cambio di segno
@@ -46,10 +47,12 @@ app/src/main/java/io/github/calcolatrice/
     ├── Settings.kt                Formato dei numeri e variabili, condivisi tra le schermate
     ├── Dialogs.kt                 Dialoghi "salva in una variabile", "formato dei numeri" e menu MATH
     ├── FitTextView.kt             Testo su una riga che si rimpicciolisce fino a una dimensione minima
+    ├── FractionSpan.kt            Frazione disegnata su due livelli (numeratore, linea, denominatore)
     ├── GraphView.kt               Grafico disegnato a mano: assi, griglia, curva, trascinamento, zoom, lettura dei punti
     └── ViewUtils.kt               Edge-to-edge, insets, sfondi e altre utilità condivise
 app/src/main/res/                  Testi (it/en), colori, icone, tema di sistema
 app/src/test/                      Test unitari del motore di calcolo
+tools/make_icon.py                 Genera i tre livelli dell'icona e le anteprime dalla stessa geometria
 ```
 
 ### Formato interno delle espressioni
@@ -131,6 +134,21 @@ Il display principale è un `FitTextView`: una riga sola, con il testo che si ri
 la parte da mostrare attorno al cursore (o alla fine), con "…" ai bordi; la finestra resta ferma finché
 il cursore si sposta al suo interno. `windowShift` riporta i tocchi sul display alla posizione nel testo completo.
 
+Il testo parte subito alla dimensione massima (`setSizeRange`), così la prima misura dell'altezza è giusta;
+quando cambia la larghezza la nuova dimensione si applica dopo il layout in corso. Le misure usano
+`Layout.getDesiredWidth`, che tiene conto degli span. Con `fitsHeight` (display principale, altezza fissata
+dal layout) il testo si rimpicciolisce anche quando una frazione su due livelli non starebbe in altezza.
+
+### Frazioni su due livelli
+
+Con la forma esatta attiva, `FractionText.find` trova nel testo del risultato le frazioni (`3/4`, `√3/2`,
+`3π/4`, `(√3/2)i` senza le parentesi, separatori delle migliaia compresi) e `stackedFractions` le copre con un
+`FractionSpan`: un `ReplacementSpan` che disegna numeratore e denominatore al 70% della dimensione, centrati
+sulla linea di frazione all'altezza del segno meno, e allarga la riga quanto serve (`getSize` modifica le
+metriche). Il testo sotto gli span non cambia: copia e TalkBack restano quelli di prima. Si usa nel display e
+nell'anteprima della calcolatrice, nei risultati di equazioni e disequazioni, nella tabella e nell'analisi
+delle funzioni. L'espressione in scrittura resta lineare.
+
 ### Equazioni e sistemi
 
 - **Sistemi lineari** (`LinearSystem`): eliminazione di Gauss con pivot parziale a 34 cifre, dopo aver
@@ -185,6 +203,17 @@ dati (massimo 200 righe). I dati sono salvati nel file `statistics`.
 | `equations` | coefficienti di ogni modalità, segni delle disequazioni, modalità scelta, frazioni sì/no |
 | `statistics` | dati di ogni modalità, modalità scelta |
 | `functions` | funzione, parametri di tabella e analisi, vista scelta, gradi o radianti |
+
+### Icona
+
+Icona adattiva (`mipmap-anydpi-v26/ic_launcher.xml`, sufficiente con minSdk 26) a tre livelli vettoriali di
+108 dp: sfondo con un gradiente leggero (`drawable/ic_launcher_background.xml`), primo piano con i quattro
+tasti + − × = in una griglia di 48 dp (`ic_launcher_foreground.xml`) e livello monocromatico per le icone a
+tema di Android 13+ (`ic_launcher_monochrome.xml`). Tutto il disegno sta nel cerchio della zona sicura di
+66 dp, quindi nessuna maschera del launcher lo taglia; niente ombre né forme ritagliate a mano.
+I tre file si rigenerano con `python3 tools/make_icon.py app/src/main/res <cartella>`, che salva nella
+cartella anche le anteprime SVG con le maschere tonda, squircle, arrotondata e a tema.
+L'icona da 512 px per il Play Store non fa parte dell'APK: si esporta dalle stesse anteprime.
 
 ### Scorciatoie dell'icona
 

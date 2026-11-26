@@ -23,6 +23,7 @@ import io.github.calcolatrice.engine.FunctionSheet
 import io.github.calcolatrice.engine.FunctionTab
 import io.github.calcolatrice.engine.ResultFormatter
 import io.github.calcolatrice.engine.UserFunction
+import io.github.calcolatrice.ui.stackedFractions
 import io.github.calcolatrice.ui.FitTextView
 import io.github.calcolatrice.ui.GraphView
 import io.github.calcolatrice.ui.HardwareKeys
@@ -262,6 +263,9 @@ class FunctionActivity : SheetActivity() {
     private fun number(x: BigDecimal) = solutions.value(x, asFraction = false)
 
     /** Un risultato: in forma esatta se a/b è attivo e il valore ne ha una. */
+    /** Frazioni su due livelli quando i risultati sono in forma esatta. */
+    private fun stacked(text: String): CharSequence = if (asFraction) stackedFractions(text) else text
+
     private fun result(x: BigDecimal, approximate: Boolean = false) = solutions.value(x, asFraction && !approximate)
 
     private fun failureText(error: Throwable?): String =
@@ -289,7 +293,7 @@ class FunctionActivity : SheetActivity() {
             xView.text = number(x)
             when (y) {
                 is EvalResult.Success -> {
-                    yView.text = result(y.value)
+                    yView.text = stacked(result(y.value))
                     yView.setTextColor(palette.onBackground)
                 }
                 is EvalResult.Failure -> {
@@ -381,7 +385,7 @@ class FunctionActivity : SheetActivity() {
             lines += ""
             lines += getString(R.string.analysis_approximate)
         }
-        analysisView.text = lines.joinToString("\n")
+        analysisView.text = stacked(lines.joinToString("\n"))
         storable = values
     }
 

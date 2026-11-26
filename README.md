@@ -95,6 +95,10 @@ radici (`2√2`, `√6/3`) e multipli di π (`3π/4`). La forma esatta si ricono
 34 cifre: per questo funziona anche dopo calcoli lunghi. Restano decimali le somme di radici diverse
 (√2 + √3) e i numeri come (1 + √5)/2.
 
+Sullo schermo le frazioni si scrivono come sul quaderno, con il numeratore sopra la linea di frazione e il
+denominatore sotto (anche `√3/2`, `3π/4` e le parti immaginarie). Quando le copi diventano testo su una riga:
+`3/4`. L'espressione che scrivi resta invece su una riga, come nelle calcolatrici scientifiche più semplici.
+
 ### Radice quadrata
 
 **√** si applica al numero o alla parentesi che la segue: `√9 + 16` fa 3 + 16 = 19. Per la radice di

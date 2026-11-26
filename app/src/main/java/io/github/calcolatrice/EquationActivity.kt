@@ -20,6 +20,7 @@ import io.github.calcolatrice.engine.QuadraticSolution
 import io.github.calcolatrice.engine.Relation
 import io.github.calcolatrice.engine.SolutionSet
 import io.github.calcolatrice.engine.Vertex
+import io.github.calcolatrice.ui.stackedFractions
 import io.github.calcolatrice.ui.KeyButton
 import io.github.calcolatrice.ui.PadAction
 import io.github.calcolatrice.ui.NamedValue
@@ -177,7 +178,8 @@ class EquationActivity : SheetActivity() {
         messageView.text = description.message.orEmpty()
         messageView.visibility = if (description.message == null) View.GONE else View.VISIBLE
         messageView.setTextColor(if (outcome is EquationOutcome.Error) palette.error else palette.onBackgroundVariant)
-        resultView.text = description.lines.joinToString("\n")
+        val results = description.lines.joinToString("\n")
+        resultView.text = if (asFraction) stackedFractions(results) else results
         resultView.visibility = if (description.lines.isEmpty()) View.GONE else View.VISIBLE
         noteView.text = description.note.orEmpty()
         noteView.visibility = if (description.note == null) View.GONE else View.VISIBLE
