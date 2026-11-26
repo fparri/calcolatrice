@@ -32,6 +32,9 @@ internal class CalcException(val error: CalcError) : RuntimeException(error.name
  * - operatori `+ - * / ^`, postfissi `!` (fattoriale) e `%` (diviso 100)
  * - costanti `π`, `e` e `@` (risultato precedente, "Ans"); variabili `A B C D X Y M` (valore 0 se non definite)
  * - `√` (radice quadrata, prefisso) e funzioni `sin( cos( tan( asin( acos( atan( ln( log(`
+ * - funzioni con più argomenti separati da `;`: `log(b;x)` (logaritmo in base b), `root(n;x)`, `ncr(n;k)`,
+ *   `npr(n;k)`, `gcd(a;b;…)`, `lcm(a;b;…)`, `binp(n;p;k)`, `binc(n;p;k)`, `normc(a;b)` e `normc(a;b;μ;σ)`;
+ *   inoltre `abs(`
  *
  * `√` si applica solo all'operando che lo segue: `√9! = (√9)!`, `√4^2 = (√4)^2`.
  * Dopo `+` o `−` la percentuale si riferisce al valore precedente, come sulle calcolatrici
@@ -64,12 +67,31 @@ internal sealed interface Token {
     data class Variable(val name: Char) : Token
     data object OpenParen : Token
     data object CloseParen : Token
+    data object Separator : Token
     data object Sqrt : Token
 }
 
 internal object Tokenizer {
     /** Nomi delle funzioni, dal più lungo al più corto (così "asin" ha la precedenza su "sin"). */
-    val FUNCTIONS = listOf("asin", "acos", "atan", "sin", "cos", "tan", "ln", "log")
+    val FUNCTIONS = listOf(
+        "normc", "asin", "acos", "atan", "root", "binp", "binc",
+        "sin", "cos", "tan", "abs", "ncr", "npr", "gcd", "lcm", "log", "ln",
+    )
+
+    /** Numero di argomenti ammessi da ogni funzione. */
+    val ARITY: Map<String, IntRange> = FUNCTIONS.associateWith { name ->
+        when (name) {
+            "log" -> 1..2
+            "root", "ncr", "npr" -> 2..2
+            "gcd", "lcm" -> 2..Int.MAX_VALUE
+            "binp", "binc" -> 3..3
+            "normc" -> 2..4
+            else -> 1..1
+        }
+    }
+
+    /** Funzioni che accettano più di un argomento: dopo di esse il tasto `;` è attivo. */
+    val MULTI_ARGUMENT: Set<String> = ARITY.filterValues { it.last > 1 }.keys
 
     fun tokenize(input: String): List<Token> {
         val tokens = mutableListOf<Token>()
@@ -94,6 +116,7 @@ internal object Tokenizer {
                 c == '!' || c == '%' -> tokens += Token.Postfix(c)
                 c == '(' -> tokens += Token.OpenParen
                 c == ')' -> tokens += Token.CloseParen
+                c == ';' -> tokens += Token.Separator
                 c == '√' -> tokens += Token.Sqrt
                 c == 'π' || c == '@' -> tokens += Token.Constant(c)
                 c in VARIABLES -> tokens += Token.Variable(c)
@@ -169,6 +192,12 @@ internal object MathSupport {
         }
         val integerExponent = isInteger(exponent)
         if (!integerExponent && base.signum() < 0) throw CalcException(CalcError.UNDEFINED)
+
+        // ±1 elevato a qualunque esponente: il controllo con i double sotto darebbe 0·∞ = NaN per esponenti enormi.
+        if (base.abs().compareTo(BigDecimal.ONE) == 0) {
+            val negative = base.signum() < 0 && exponent.toBigInteger().testBit(0)
+            return if (negative) BigDecimal.ONE.negate() else BigDecimal.ONE
+        }
 
         // Controllo dell'ordine di grandezza prima di calcolare.
         val magnitude = log10Abs(base) * exponent.toDouble()
@@ -273,6 +302,13 @@ internal class Parser(
     /** True se l'ultimo termine letto da [parseTerm] è una percentuale semplice (es. `10%`). */
     private var termIsPercent = false
 
+    /**
+     * Il più grande valore assoluto sommato o sottratto durante il calcolo. Dà la scala del rumore
+     * di arrotondamento: un risultato più piccolo di circa 10⁻³² volte questo valore non si distingue da zero.
+     */
+    var magnitude: BigDecimal = BigDecimal.ZERO
+        private set
+
     fun parse(): BigDecimal {
         val value = parseExpression()
         if (pos != tokens.size) throw CalcException(CalcError.SYNTAX)
@@ -294,6 +330,7 @@ internal class Parser(
                 var right = parseTerm()
                 // a ± b% = a ± a·b/100 (sconti e maggiorazioni).
                 if (termIsPercent) right = left.multiply(right, mc)
+                magnitude = magnitude.max(left.abs()).max(right.abs())
                 left = MathSupport.checked(
                     if (t.symbol == '+') left.add(right, mc) else left.subtract(right, mc),
                 )
@@ -392,9 +429,17 @@ internal class Parser(
         is Token.Variable -> variables[t.name] ?: BigDecimal.ZERO
         Token.OpenParen -> parseExpression().also { expectCloseParen() }
         is Token.Function -> {
-            val argument = parseExpression()
+            val arguments = mutableListOf(parseExpression())
+            while (peek() == Token.Separator) {
+                pos++
+                arguments += parseExpression()
+            }
             expectCloseParen()
-            applyFunction(t.name, argument)
+            val arity = Tokenizer.ARITY.getValue(t.name)
+            if (arguments.size !in arity || (t.name == "normc" && arguments.size == 3)) {
+                throw CalcException(CalcError.SYNTAX)
+            }
+            applyFunction(t.name, arguments)
         }
         Token.Sqrt -> MathSupport.sqrt(parseSqrtOperand())
         else -> throw CalcException(CalcError.SYNTAX)
@@ -423,10 +468,27 @@ internal class Parser(
         }
     }
 
-    private fun applyFunction(name: String, x: BigDecimal): BigDecimal = when (name) {
-        "sin", "cos", "tan" -> MathSupport.trig(name, x, angleUnit)
-        "asin", "acos", "atan" -> MathSupport.inverseTrig(name, x, angleUnit)
-        "ln", "log" -> MathSupport.logarithm(name, x)
-        else -> throw CalcException(CalcError.SYNTAX)
+    private fun applyFunction(name: String, args: List<BigDecimal>): BigDecimal {
+        val x = args[0]
+        return when (name) {
+            "sin", "cos", "tan" -> MathSupport.trig(name, x, angleUnit)
+            "asin", "acos", "atan" -> MathSupport.inverseTrig(name, x, angleUnit)
+            "ln" -> MathSupport.logarithm(name, x)
+            "log" -> if (args.size == 1) MathSupport.logarithm(name, x) else MoreMath.logBase(x, args[1])
+            "abs" -> x.abs()
+            "root" -> MoreMath.root(x, args[1])
+            "ncr" -> MoreMath.combinations(x, args[1])
+            "npr" -> MoreMath.permutations(x, args[1])
+            "gcd" -> MoreMath.gcd(args)
+            "lcm" -> MoreMath.lcm(args)
+            "binp" -> MoreMath.binomialPdf(x, args[1], args[2])
+            "binc" -> MoreMath.binomialCdf(x, args[1], args[2])
+            "normc" -> if (args.size == 2) {
+                MoreMath.normalCdf(x, args[1], BigDecimal.ZERO, BigDecimal.ONE)
+            } else {
+                MoreMath.normalCdf(x, args[1], args[2], args[3])
+            }
+            else -> throw CalcException(CalcError.SYNTAX)
+        }
     }
 }

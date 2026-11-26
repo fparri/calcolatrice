@@ -28,8 +28,6 @@
     <string name="key_backspace">Delete</string>
     <string name="key_clear">Clear all</string>
     <string name="key_parentheses">parentheses</string>
-    <string name="key_open_paren">open parenthesis</string>
-    <string name="key_close_paren">close parenthesis</string>
     <string name="key_power">to the power of</string>
     <string name="key_sqrt">square root</string>
     <string name="key_square">squared</string>
@@ -128,4 +126,72 @@
     <!-- Scorciatoie dell'icona -->
     <string name="shortcut_equations_short">Equations</string>
     <string name="shortcut_statistics_short">Statistics</string>
+
+    <!-- Menu MATH -->
+    <string name="math_short" translatable="false">MATH</string>
+    <string name="key_math">Math functions</string>
+    <string name="key_separator">separator between values</string>
+    <string name="key_nth_root">n-th root</string>
+    <string name="math_menu_title">Math functions</string>
+    <string name="math_hint">Separate the values with the ; key</string>
+    <string name="math_abs">Absolute value</string>
+    <string name="math_root">n-th root of x</string>
+    <string name="math_log_base">Logarithm of x in base b</string>
+    <string name="math_ncr">Combinations of n items taken k at a time</string>
+    <string name="math_npr">Permutations of n items taken k at a time</string>
+    <string name="math_gcd">Greatest common divisor</string>
+    <string name="math_lcm">Least common multiple</string>
+    <string name="math_binp">Binomial: probability of exactly k successes in n trials</string>
+    <string name="math_binc">Binomial: probability of at most k successes in n trials</string>
+    <string name="math_normc">Normal: probability between a and b, with mean μ and standard deviation σ (without them: standard normal)</string>
+    <string name="fn_gcd">gcd</string>
+    <string name="fn_lcm">lcm</string>
+
+    <!-- Disequazioni -->
+    <string name="mode_inequality">Inequal.</string>
+    <string name="mode_inequality_description">Inequality ax² + bx + c greater or less than 0, or a system of two</string>
+    <string name="formula_inequality" translatable="false">ax² + bx + c %1$s 0</string>
+    <string name="inequality_hint">Tap the sign to change it. The second row is optional: fill it in to solve a system.</string>
+    <string name="inequality_system">System of two inequalities</string>
+    <string name="all_real_solutions">Every real x is a solution</string>
+    <string name="relation_description">Inequality %1$d: %2$s zero. Tap to change</string>
+    <string name="relation_greater">greater than</string>
+    <string name="relation_greater_equal">greater than or equal to</string>
+    <string name="relation_less">less than</string>
+    <string name="relation_less_equal">less than or equal to</string>
+
+    <!-- Funzioni: tabella, grafico, analisi -->
+    <string name="functions">Functions and graphs</string>
+    <string name="shortcut_functions_short">Functions</string>
+    <string name="tab_table">Table</string>
+    <string name="tab_graph">Graph</string>
+    <string name="tab_analysis">Analysis</string>
+    <string name="tab_table_description">Table of values</string>
+    <string name="tab_graph_description">Graph of the function</string>
+    <string name="tab_analysis_description">Derivative, integral and zeros</string>
+    <string name="function_label" translatable="false">f(x) =</string>
+    <string name="function_hint">Write a function of X</string>
+    <string name="function_cell_description">Function f of x: %1$s</string>
+    <string name="table_from">from</string>
+    <string name="table_step">step</string>
+    <string name="analysis_point" translatable="false">x₀</string>
+    <string name="analysis_from" translatable="false">a</string>
+    <string name="analysis_to" translatable="false">b</string>
+    <string name="parameter_description">%1$s: %2$s</string>
+    <string name="undefined_short">undef.</string>
+    <string name="analysis_hint">Press = to calculate f(x₀), f′(x₀), the integral from a to b and the zeros between a and b</string>
+    <string name="analysis_running">Calculating…</string>
+    <string name="analysis_zeros">Zeros between a and b</string>
+    <string name="analysis_no_zeros">none</string>
+    <string name="analysis_approximate">≈ approximate value: the integral may not converge</string>
+    <string name="not_differentiable">not differentiable</string>
+    <string name="graph_hint">Drag to move, pinch to zoom, double tap to reset, tap to read a point</string>
+    <string name="graph_description">Graph of f(x) for x from %1$s to %2$s</string>
+    <string name="graph_empty">Write a function of X to see its graph</string>
+    <string name="key_variable_x">variable X</string>
+    <string name="clear_cell">Clear this box. Hold to reset everything</string>
+
+    <!-- Statistica con frequenze -->
+    <string name="stat_frequency">Frequencies</string>
+    <string name="stat_frequency_description">Values x with their frequencies f</string>
 </resources>

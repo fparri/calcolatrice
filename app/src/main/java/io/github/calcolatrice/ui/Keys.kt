@@ -5,6 +5,7 @@ import io.github.calcolatrice.R
 import io.github.calcolatrice.engine.AngleUnit
 import io.github.calcolatrice.engine.CalcKey
 import io.github.calcolatrice.engine.EquationMode
+import io.github.calcolatrice.engine.FunctionTab
 import io.github.calcolatrice.engine.StatMode
 
 /** Azioni dei tasti: input per l'editor oppure comandi dell'interfaccia. */
@@ -16,6 +17,7 @@ sealed interface PadAction {
     data object ShowHistory : PadAction
     data object ShowMenu : PadAction
     data object ShowVariables : PadAction
+    data object ShowMath : PadAction
     data object Solve : PadAction
     data object MemoryAdd : PadAction
     data object MemorySubtract : PadAction
@@ -23,6 +25,7 @@ sealed interface PadAction {
     data object Back : PadAction
     data class SetEquationMode(val mode: EquationMode) : PadAction
     data class SetStatMode(val mode: StatMode) : PadAction
+    data class SetFunctionTab(val tab: FunctionTab) : PadAction
     data class Sheet(val command: SheetCommand) : PadAction
 }
 
@@ -114,12 +117,14 @@ class KeyFactory(private val context: Context) {
         Triple(EquationMode.SYSTEM_3, R.string.mode_system_3, R.string.mode_system_3_description),
         Triple(EquationMode.QUADRATIC, R.string.mode_quadratic, R.string.mode_quadratic_description),
         Triple(EquationMode.CUBIC, R.string.mode_cubic, R.string.mode_cubic_description),
+        Triple(EquationMode.INEQUALITY, R.string.mode_inequality, R.string.mode_inequality_description),
     ).map { (mode, label, description) ->
         PadKey(s(label), PadAction.SetEquationMode(mode), KeyStyle.Toggle, s(description), active = mode == current)
     }
 
     fun statModes(current: StatMode): List<PadKey> = listOf(
         Triple(StatMode.ONE_VARIABLE, R.string.stat_one_variable, R.string.stat_one_variable_description),
+        Triple(StatMode.FREQUENCY, R.string.stat_frequency, R.string.stat_frequency_description),
         Triple(StatMode.REGRESSION, R.string.stat_regression, R.string.stat_regression_description),
     ).map { (mode, label, description) ->
         PadKey(s(label), PadAction.SetStatMode(mode), KeyStyle.Toggle, s(description), active = mode == current)
@@ -176,6 +181,9 @@ class KeyFactory(private val context: Context) {
         active = inverse,
     )
 
+    /** DEG/RAD, anche fuori dal pannello scientifico (schermata Funzioni). */
+    fun angleToggle(angleUnit: AngleUnit): PadKey = angleKey(angleUnit)
+
     private fun angleKey(angleUnit: AngleUnit): PadKey {
         val degrees = angleUnit == AngleUnit.DEGREES
         val name = s(if (degrees) R.string.angle_degrees else R.string.angle_radians)
@@ -215,15 +223,55 @@ class KeyFactory(private val context: Context) {
     }
 
     private fun powerKey() = fn("xʸ", CalcKey.Operator('^'), R.string.key_power)
+    fun mathKey() = PadKey(s(R.string.math_short), PadAction.ShowMath, KeyStyle.Function, s(R.string.key_math))
+    fun separatorKey() = fn(";", CalcKey.Separator, R.string.key_separator)
+    private fun reciprocalKey() = fn("1/x", CalcKey.Reciprocal, R.string.key_reciprocal)
+    private fun nthRootKey() = fn("ⁿ√", CalcKey.Function("root"), R.string.key_nth_root)
     private fun piKey() = fn("π", CalcKey.Constant('π'), R.string.key_pi)
     private fun eKey() = fn("e", CalcKey.Constant('e'), R.string.key_e)
     private fun factorialKey() = fn("x!", CalcKey.Factorial, R.string.key_factorial)
 
-    /** In verticale: 4 colonne × 4 righe (la prima sempre visibile). */
+    // ------------------------------------------------------------ schermata funzioni
+
+    fun functionTabs(current: FunctionTab): List<PadKey> = listOf(
+        Triple(FunctionTab.TABLE, R.string.tab_table, R.string.tab_table_description),
+        Triple(FunctionTab.GRAPH, R.string.tab_graph, R.string.tab_graph_description),
+        Triple(FunctionTab.ANALYSIS, R.string.tab_analysis, R.string.tab_analysis_description),
+    ).map { (tab, label, description) ->
+        PadKey(s(label), PadAction.SetFunctionTab(tab), KeyStyle.Toggle, s(description), active = tab == current)
+    }
+
+    /** Prima riga di strumenti: spostamento tra le caselle, potenza, radice, π. */
+    fun functionTools(): List<PadKey> = cellNavigation() + listOf(powerKey(), rootKey(inverse = false), piKey())
+
+    /** Seconda riga: funzioni più usate e il menu con tutte le altre. */
+    fun functionTools2(): List<PadKey> = listOf(
+        fn("sin", CalcKey.Function("sin"), R.string.key_sin),
+        fn("cos", CalcKey.Function("cos"), R.string.key_cos),
+        fn("tan", CalcKey.Function("tan"), R.string.key_tan),
+        fn("ln", CalcKey.Function("ln"), R.string.key_ln),
+        mathKey(),
+    )
+
+    /** Tastierino della schermata funzioni: come quello delle equazioni, con la X al posto di xʸ. */
+    fun functionMain(decimalSeparator: Char): List<List<PadKey>> = equationMain(decimalSeparator).map { row ->
+        row.map { key ->
+            when (key.action) {
+                PadAction.Input(CalcKey.Operator('^')) ->
+                    PadKey("X", input(CalcKey.Variable('X')), KeyStyle.Operator, s(R.string.key_variable_x))
+                PadAction.Input(CalcKey.Clear) -> key.copy(description = s(R.string.clear_cell))
+                PadAction.Input(CalcKey.Equals) -> key.copy(description = s(R.string.key_equals))
+                else -> key
+            }
+        }
+    }
+
+    /** In verticale: 4 colonne × 5 righe (la prima sempre visibile). */
     fun scientificPortrait(inverse: Boolean, angleUnit: AngleUnit): List<List<PadKey>> = listOf(
         listOf(inverseKey(inverse), angleKey(angleUnit), rootKey(inverse), powerKey()),
         trigKeys(inverse) + piKey(),
         logKeys(inverse) + factorialKey() + eKey(),
+        listOf(mathKey(), separatorKey(), reciprocalKey(), nthRootKey()),
         listOf(variableKey('X'), solveKey(), variablesKey(), memoryAddKey()),
     )
 
@@ -233,11 +281,6 @@ class KeyFactory(private val context: Context) {
         trigKeys(inverse) + solveKey(),
         logKeys(inverse) + rootKey(inverse) + variablesKey(),
         listOf(piKey(), eKey(), factorialKey(), memoryAddKey()),
-        listOf(
-            fn("(", CalcKey.OpenParen, R.string.key_open_paren),
-            fn(")", CalcKey.CloseParen, R.string.key_close_paren),
-            fn("1/x", CalcKey.Reciprocal, R.string.key_reciprocal),
-            memorySubtractKey(),
-        ),
+        listOf(mathKey(), separatorKey(), reciprocalKey(), memorySubtractKey()),
     )
 }

@@ -109,7 +109,14 @@ class DisplayFormatter(
     private val decimalSeparator: Char = '.',
     /** null = nessun raggruppamento delle migliaia (utile per copiare il numero). */
     private val groupingSeparator: Char? = ',',
+    /** Nomi delle funzioni nella lingua dell'utente (es. `gcd` → `MCD`), oltre a quelli predefiniti. */
+    functionNames: Map<String, String> = emptyMap(),
 ) {
+    /** Token interno (`ncr(`) → testo mostrato (`nCr(`), per ogni funzione. */
+    private val functionDisplay: List<Pair<String, String>> = Tokenizer.FUNCTIONS.map { name ->
+        val shown = functionNames[name] ?: DISPLAY_NAMES[name] ?: name
+        "$name(" to "$shown("
+    }
     /**
      * Testo per lo schermo e, per ogni posizione dell'espressione (con Ans già sostituito),
      * la posizione corrispondente nel testo: serve per disegnare e spostare il cursore.
@@ -141,11 +148,18 @@ class DisplayFormatter(
                     continue
                 }
             }
-            val function = DISPLAY_FUNCTIONS.entries.firstOrNull { s.startsWith(it.key, i) }
+            // I token delle funzioni si scrivono interi: "nCr(" non va letto lettera per lettera.
+            val function = functionDisplay.firstOrNull { s.startsWith(it.first, i) }
             if (function != null) {
-                for (k in i until i + function.key.length) positions[k] = out.length
-                out.append(function.value)
-                i += function.key.length
+                for (k in i until i + function.first.length) positions[k] = out.length
+                out.append(function.second)
+                i += function.first.length
+                continue
+            }
+            if (c == ';') {
+                positions[i] = out.length
+                out.append("; ")
+                i++
                 continue
             }
             positions[i] = out.length
@@ -213,10 +227,17 @@ class DisplayFormatter(
     }
 
     private companion object {
-        val DISPLAY_FUNCTIONS = linkedMapOf(
-            "asin(" to "sin⁻¹(",
-            "acos(" to "cos⁻¹(",
-            "atan(" to "tan⁻¹(",
+        /** Nomi mostrati per le funzioni il cui nome interno è diverso. */
+        val DISPLAY_NAMES = mapOf(
+            "asin" to "sin⁻¹",
+            "acos" to "cos⁻¹",
+            "atan" to "tan⁻¹",
+            "root" to "ⁿ√",
+            "ncr" to "nCr",
+            "npr" to "nPr",
+            "binp" to "BinomP",
+            "binc" to "BinomC",
+            "normc" to "NormC",
         )
         val SUPERSCRIPTS = mapOf(
             '0' to '⁰', '1' to '¹', '2' to '²', '3' to '³', '4' to '⁴',

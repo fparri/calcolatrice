@@ -25,8 +25,6 @@
     <string name="key_backspace">Cancella</string>
     <string name="key_clear">Cancella tutto</string>
     <string name="key_parentheses">parentesi</string>
-    <string name="key_open_paren">parentesi aperta</string>
-    <string name="key_close_paren">parentesi chiusa</string>
     <string name="key_power">elevato a</string>
     <string name="key_sqrt">radice quadrata</string>
     <string name="key_square">al quadrato</string>
@@ -116,4 +114,66 @@
     <!-- Scorciatoie dell'icona -->
     <string name="shortcut_equations_short">Equazioni</string>
     <string name="shortcut_statistics_short">Statistica</string>
+
+    <!-- Menu MATH -->
+    <string name="key_math">Funzioni matematiche</string>
+    <string name="key_separator">separatore tra i valori</string>
+    <string name="key_nth_root">radice n-esima</string>
+    <string name="math_menu_title">Funzioni</string>
+    <string name="math_hint">Separa i valori con il tasto ;</string>
+    <string name="math_abs">Valore assoluto</string>
+    <string name="math_root">Radice n-esima di x</string>
+    <string name="math_log_base">Logaritmo di x in base b</string>
+    <string name="math_ncr">Combinazioni semplici di n elementi a k a k</string>
+    <string name="math_npr">Disposizioni semplici di n elementi a k a k</string>
+    <string name="math_gcd">Massimo comune divisore</string>
+    <string name="math_lcm">Minimo comune multiplo</string>
+    <string name="math_binp">Binomiale: probabilità di esattamente k successi in n prove</string>
+    <string name="math_binc">Binomiale: probabilità di al massimo k successi in n prove</string>
+    <string name="math_normc">Normale: probabilità tra a e b, con media μ e deviazione standard σ (senza: normale standardizzata)</string>
+    <string name="fn_gcd">MCD</string>
+    <string name="fn_lcm">mcm</string>
+
+    <!-- Disequazioni -->
+    <string name="mode_inequality">Diseq.</string>
+    <string name="mode_inequality_description">Disequazione ax² + bx + c maggiore o minore di 0, oppure sistema di due</string>
+    <string name="inequality_hint">Tocca il segno per cambiarlo. La seconda riga è facoltativa: compilala per risolvere un sistema.</string>
+    <string name="inequality_system">Sistema di due disequazioni</string>
+    <string name="all_real_solutions">Ogni x reale è soluzione</string>
+    <string name="relation_description">Disequazione %1$d: %2$s zero. Tocca per cambiare</string>
+    <string name="relation_greater">maggiore di</string>
+    <string name="relation_greater_equal">maggiore o uguale a</string>
+    <string name="relation_less">minore di</string>
+    <string name="relation_less_equal">minore o uguale a</string>
+
+    <!-- Funzioni: tabella, grafico, analisi -->
+    <string name="functions">Funzioni e grafici</string>
+    <string name="shortcut_functions_short">Funzioni</string>
+    <string name="tab_table">Tabella</string>
+    <string name="tab_graph">Grafico</string>
+    <string name="tab_analysis">Analisi</string>
+    <string name="tab_table_description">Tabella dei valori</string>
+    <string name="tab_graph_description">Grafico della funzione</string>
+    <string name="tab_analysis_description">Derivata, integrale e zeri</string>
+    <string name="function_hint">Scrivi una funzione di X</string>
+    <string name="function_cell_description">Funzione f di x: %1$s</string>
+    <string name="table_from">da</string>
+    <string name="table_step">passo</string>
+    <string name="parameter_description">%1$s: %2$s</string>
+    <string name="undefined_short">non def.</string>
+    <string name="analysis_hint">Premi = per calcolare f(x₀), f′(x₀), l\'integrale da a a b e gli zeri tra a e b</string>
+    <string name="analysis_running">Calcolo in corso…</string>
+    <string name="analysis_zeros">Zeri tra a e b</string>
+    <string name="analysis_no_zeros">nessuno</string>
+    <string name="analysis_approximate">≈ valore approssimato: l\'integrale potrebbe non convergere</string>
+    <string name="not_differentiable">non derivabile</string>
+    <string name="graph_hint">Trascina per spostarti, avvicina due dita per ingrandire, doppio tocco per ricominciare, tocca per leggere un punto</string>
+    <string name="graph_description">Grafico di f(x) per x da %1$s a %2$s</string>
+    <string name="graph_empty">Scrivi una funzione di X per vederne il grafico</string>
+    <string name="key_variable_x">variabile X</string>
+    <string name="clear_cell">Cancella la casella. Tieni premuto per ricominciare da capo</string>
+
+    <!-- Statistica con frequenze -->
+    <string name="stat_frequency">Frequenze</string>
+    <string name="stat_frequency_description">Valori x con le loro frequenze f</string>
 </resources>

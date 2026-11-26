@@ -29,6 +29,11 @@
             android:label="@string/equations" />
 
         <activity
+            android:name=".FunctionActivity"
+            android:exported="false"
+            android:label="@string/functions" />
+
+        <activity
             android:name=".StatisticsActivity"
             android:exported="false"
             android:label="@string/statistics" />

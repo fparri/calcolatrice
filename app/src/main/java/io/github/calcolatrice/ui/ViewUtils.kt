@@ -82,6 +82,12 @@ fun View.padForSystemBars(horizontal: Int, vertical: Int) {
     }
 }
 
+/** Nomi delle funzioni che cambiano con la lingua (MCD e mcm in italiano), per [io.github.calcolatrice.engine.DisplayFormatter]. */
+fun Context.localFunctionNames(): Map<String, String> = mapOf(
+    "gcd" to getString(R.string.fn_gcd),
+    "lcm" to getString(R.string.fn_lcm),
+)
+
 /** Messaggio da mostrare per un errore di calcolo. */
 fun errorMessage(error: CalcError): Int = when (error) {
     CalcError.DIVISION_BY_ZERO -> R.string.error_division_by_zero

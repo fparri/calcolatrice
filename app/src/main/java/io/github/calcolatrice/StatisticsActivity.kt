@@ -39,6 +39,7 @@ import io.github.calcolatrice.ui.SheetCommand
 import io.github.calcolatrice.ui.cellBackground
 import io.github.calcolatrice.ui.dp
 import io.github.calcolatrice.ui.errorMessage
+import io.github.calcolatrice.ui.localFunctionNames
 import io.github.calcolatrice.ui.padForSystemBars
 import io.github.calcolatrice.ui.roundedDrawable
 import io.github.calcolatrice.ui.setupEdgeToEdge
@@ -90,7 +91,7 @@ class StatisticsActivity : Activity() {
         pad = KeyPad(this, palette, ::onAction)
         val symbols = DecimalFormatSymbols.getInstance(resources.configuration.locales[0])
         decimalSeparator = symbols.decimalSeparator
-        display = DisplayFormatter(symbols.decimalSeparator, symbols.groupingSeparator)
+        display = DisplayFormatter(symbols.decimalSeparator, symbols.groupingSeparator, localFunctionNames())
         solutions = SolutionFormatter(display, settings.numberFormat)
 
         sheet = restoreSheet()
@@ -213,7 +214,11 @@ class StatisticsActivity : Activity() {
         messageView.setTextColor(if (error != null || outcome == StatOutcome.NotEnoughData) palette.error else palette.onBackgroundVariant)
     }
 
-    private fun columnName(c: Int) = if (c == 0) "x" else "y"
+    private fun columnName(c: Int) = when {
+        c == 0 -> "x"
+        sheet.mode == StatMode.FREQUENCY -> "f"
+        else -> "y"
+    }
 
     private fun value(x: BigDecimal) = solutions.value(x, asFraction = false)
 
@@ -237,7 +242,15 @@ class StatisticsActivity : Activity() {
         line("Med", s.median),
         line("Q₃", s.q3),
         line("max", s.max),
+        mode(s.modes),
     )
+
+    /** Moda: uno o più valori ("Mo = 3; 5"), oppure "—" se tutti i valori sono ugualmente frequenti. */
+    private fun mode(modes: List<BigDecimal>): NamedValue {
+        val text = if (modes.isEmpty()) "—" else modes.take(MAX_MODES).joinToString("; ") { value(it) } +
+            if (modes.size > MAX_MODES) "; …" else ""
+        return NamedValue("Mo = $text", modes.firstOrNull() ?: BigDecimal.ZERO)
+    }
 
     private fun describeRegression(s: RegressionStats): List<NamedValue> = listOfNotNull(
         line("a", s.a),
@@ -449,5 +462,6 @@ class StatisticsActivity : Activity() {
         const val PREF_SHEET = "sheet"
         const val PREF_SOLVED = "solved"
         const val INDEX_WIDTH = 32
+        const val MAX_MODES = 5
     }
 }

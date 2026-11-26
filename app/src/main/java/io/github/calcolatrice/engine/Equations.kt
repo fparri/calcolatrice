@@ -49,6 +49,10 @@ object LinearSystem {
     /**
      * Risolve un sistema di n equazioni in n incognite con l'eliminazione di Gauss
      * (pivot parziale, 34 cifre significative).
+     *
+     * Prima si normalizzano righe e colonne (ogni riga e ogni colonna ha coefficiente massimo 1),
+     * così la soglia sotto cui un valore conta come zero non dipende dalla scala dei dati:
+     * 10¹⁵x = 10¹⁵ insieme a 10⁻¹⁵y = 2·10⁻¹⁵ si risolve come x = 1 e y = 2.
      * @param rows n righe, ognuna con gli n coefficienti seguiti dal termine noto.
      */
     fun solve(rows: List<List<BigDecimal>>): LinearSolution {
@@ -57,17 +61,29 @@ object LinearSystem {
         val mc = MathSupport.MC
         val m = Array(n) { r -> Array(n + 1) { c -> rows[r][c] } }
 
-        val coefficientScale = rows.maxOf { row -> row.dropLast(1).maxOf { it.abs() } }
-        val constantScale = rows.maxOf { it.last().abs() }
-        if (coefficientScale.signum() == 0) {
-            return if (constantScale.signum() == 0) LinearSolution.Infinite else LinearSolution.None
+        // Righe senza coefficienti: "0 = termine noto".
+        val emptyRows = (0 until n).filter { r -> (0 until n).all { m[r][it].signum() == 0 } }
+        if (emptyRows.any { m[it][n].signum() != 0 }) return LinearSolution.None
+
+        // Normalizzazione delle righe (termine noto compreso) e poi delle colonne dei coefficienti.
+        for (r in 0 until n) {
+            if (r in emptyRows) continue
+            val max = (0 until n).maxOf { m[r][it].abs() }
+            for (c in 0..n) m[r][c] = m[r][c].divide(max, mc)
         }
+        val columnScale = Array(n) { c -> (0 until n).maxOf { m[it][c].abs() } }
+        for (c in 0 until n) {
+            val scale = columnScale[c]
+            if (scale.signum() == 0) continue
+            for (r in 0 until n) m[r][c] = m[r][c].divide(scale, mc)
+        }
+        val constantScale = (0 until n).maxOf { m[it][n].abs() }
 
         // Riduzione a scala.
         var row = 0
         for (col in 0 until n) {
-            val pivot = (row until n).maxBy { m[it][col].abs() }
-            if (isNegligible(m[pivot][col], coefficientScale)) continue
+            val pivot = (row until n).maxByOrNull { m[it][col].abs() } ?: break
+            if (isNegligible(m[pivot][col], BigDecimal.ONE)) continue
             m[pivot] = m[row].also { m[row] = m[pivot] }
             for (r in row + 1 until n) {
                 val factor = m[r][col].divide(m[row][col], mc)
@@ -83,15 +99,21 @@ object LinearSystem {
         }
         if (row < n) return LinearSolution.Infinite
 
-        // Sostituzione all'indietro.
-        val x = Array(n) { BigDecimal.ZERO }
+        // Sostituzione all'indietro, poi si torna alle incognite originali.
+        val y = Array(n) { BigDecimal.ZERO }
         for (r in n - 1 downTo 0) {
             var sum = m[r][n]
-            for (c in r + 1 until n) sum = sum.subtract(m[r][c].multiply(x[c], mc), mc)
-            x[r] = sum.divide(m[r][r], mc)
+            for (c in r + 1 until n) sum = sum.subtract(m[r][c].multiply(y[c], mc), mc)
+            y[r] = sum.divide(m[r][r], mc)
         }
-        val resultScale = x.maxOf { it.abs() }
-        return LinearSolution.Unique(x.map { clean(it, resultScale) })
+        val x = (0 until n).map { c -> y[c].divide(columnScale[c], mc) }
+        // Residui di arrotondamento: rispetto alla propria colonna, non agli altri valori.
+        return LinearSolution.Unique(
+            x.mapIndexed { c, value ->
+                val residue = isNegligible(y[c], y.maxOf { it.abs() })
+                if (residue) BigDecimal.ZERO else MathSupport.checked(value.round(mc))
+            },
+        )
     }
 }
 
@@ -126,11 +148,12 @@ object QuadraticEquation {
                 // Formula stabile: evita di sottrarre due numeri quasi uguali.
                 val root = MathSupport.sqrt(delta)
                 val q = (if (b.signum() >= 0) b.add(root) else b.subtract(root)).negate().divide(TWO, mc)
-                val r1 = q.divide(a, mc)
-                val r2 = c.divide(q, mc)
-                val scale = r1.abs().max(r2.abs())
+                // Con la formula stabile entrambe le radici hanno tutte le cifre corrette, anche quando
+                // una è piccolissima rispetto all'altra (x² − 10¹³x + 1): non vanno azzerate.
+                val r1 = MathSupport.checked(q.divide(a, mc))
+                val r2 = MathSupport.checked(c.divide(q, mc))
                 val (x1, x2) = if (r1 >= r2) r1 to r2 else r2 to r1
-                QuadraticSolution.TwoReal(clean(x1, scale), clean(x2, scale), vertex)
+                QuadraticSolution.TwoReal(x1, x2, vertex)
             }
             else -> {
                 val im = MathSupport.sqrt(delta.negate()).divide(twoA.abs(), mc)
@@ -182,7 +205,7 @@ object CubicEquation {
                     .divide(a.multiply(delta0), mc)
                 listOf(single, double, double)
             }
-            return finish(roots, null)
+            return finish(roots, null, a, b, c, d)
         }
 
         // Una radice reale c'è sempre; le altre due vengono dall'equazione di secondo grado che resta.
@@ -191,17 +214,39 @@ object CubicEquation {
         val q0 = c.add(q1.multiply(r, mc), mc)
         val polish = { x: BigDecimal -> newton(a, b, c, d, x) }
         return when (val rest = QuadraticEquation.solve(a, q1, q0)) {
-            is QuadraticSolution.TwoReal -> finish(listOf(r, polish(rest.x1), polish(rest.x2)), null)
-            is QuadraticSolution.DoubleRoot -> finish(listOf(r, polish(rest.x), polish(rest.x)), null)
-            is QuadraticSolution.ComplexPair -> finish(listOf(r), rest.re to rest.im)
-            is QuadraticSolution.Linear -> finish(listOf(r), null) // impossibile con a ≠ 0
+            is QuadraticSolution.TwoReal -> finish(listOf(r, polish(rest.x1), polish(rest.x2)), null, a, b, c, d)
+            is QuadraticSolution.DoubleRoot -> finish(listOf(r, polish(rest.x), polish(rest.x)), null, a, b, c, d)
+            is QuadraticSolution.ComplexPair -> finish(listOf(r), rest.re to rest.im, a, b, c, d)
+            is QuadraticSolution.Linear -> finish(listOf(r), null, a, b, c, d) // impossibile con a ≠ 0
         }
     }
 
-    private fun finish(real: List<BigDecimal>, complex: Pair<BigDecimal, BigDecimal>?): CubicSolution.Roots {
+    /**
+     * Ordina e arrotonda le radici. Se 0 è una radice (termine noto trascurabile rispetto agli altri
+     * coefficienti), le radici più vicine a 0 diventano esattamente 0, tante quante la sua molteplicità;
+     * le altre restano come sono, anche se minuscole: x³ − 10¹³x² + x ha radici 10¹³, 10⁻¹³ e 0.
+     * La parte reale delle radici complesse si confronta con la parte immaginaria.
+     */
+    private fun finish(
+        real: List<BigDecimal>,
+        complex: Pair<BigDecimal, BigDecimal>?,
+        a: BigDecimal,
+        b: BigDecimal,
+        c: BigDecimal,
+        d: BigDecimal,
+    ): CubicSolution.Roots {
         val scale = real.maxOf { it.abs() }.max(complex?.let { it.first.abs().max(it.second.abs()) } ?: BigDecimal.ZERO)
-        val sorted = real.map { clean(it, scale) }.sortedDescending()
-        return CubicSolution.Roots(sorted, complex?.let { (re, im) -> clean(re, scale) to MathSupport.checked(im.round(MathSupport.MC)) })
+        val coefficientScale = a.abs().max(b.abs()).max(c.abs()).max(d.abs())
+        // Molteplicità della radice 0: quanti coefficienti finali sono trascurabili (d, poi c, poi b).
+        val zeroMultiplicity = listOf(d, c, b).takeWhile { isNegligible(it, coefficientScale) }.size
+        val zeroed = real.indices.sortedBy { real[it].abs() }.take(zeroMultiplicity).toSet()
+        val sorted = real.mapIndexed { i, x ->
+            if (i in zeroed) clean(x, scale) else MathSupport.checked(x.round(MathSupport.MC))
+        }.sortedDescending()
+        return CubicSolution.Roots(
+            sorted,
+            complex?.let { (re, im) -> clean(re, im) to MathSupport.checked(im.round(MathSupport.MC)) },
+        )
     }
 
     private fun value(a: BigDecimal, b: BigDecimal, c: BigDecimal, d: BigDecimal, x: BigDecimal): BigDecimal {
@@ -292,20 +337,36 @@ object Fractions {
     }
 }
 
-/** Testo dei risultati, come frazione oppure come decimale nel [format] scelto. */
+/**
+ * Testo dei risultati: in forma esatta (frazione, radicale, multiplo di π) oppure come decimale
+ * nel [format] scelto. I numeri interi restano sempre nel formato scelto.
+ */
 class SolutionFormatter(
     private val display: DisplayFormatter,
     private val format: NumberFormat = NumberFormat.Normal,
 ) {
 
+    /** @param asFraction true per la forma esatta (tasto a/b), se il valore ne ha una. */
     fun value(x: BigDecimal, asFraction: Boolean): String {
-        if (asFraction) {
-            val fraction = Fractions.toFraction(x)
-            if (fraction != null && fraction.denominator != BigInteger.ONE) {
-                return display.format(fraction.numerator.toString()) + "/" + display.format(fraction.denominator.toString())
-            }
-        }
+        if (asFraction) exact(x)?.let { return it }
         return display.format(ResultFormatter.format(x, format))
+    }
+
+    /** La forma esatta di [x] (es. "√3/2", "−3π/4", "11/12"), oppure null per gli interi e i valori senza forma esatta. */
+    fun exact(x: BigDecimal): String? = when (val form = ExactForms.recognize(x)) {
+        is ExactForm.Rational -> if (form.value.denominator == BigInteger.ONE) null else ratio(form.value.numerator, "", form.value.denominator)
+        is ExactForm.Radical -> ratio(form.coefficient.numerator, "√${display.format(form.radicand.toString())}", form.coefficient.denominator)
+        is ExactForm.PiMultiple -> ratio(form.coefficient.numerator, "π", form.coefficient.denominator)
+        null -> null
+    }
+
+    /** p·simbolo/q, scritto come a scuola: "√3/2", "2√2", "−π", "3π/4". */
+    private fun ratio(numerator: BigInteger, symbol: String, denominator: BigInteger): String {
+        val sign = if (numerator.signum() < 0) "−" else ""
+        val magnitude = numerator.abs()
+        val coefficient = if (symbol.isNotEmpty() && magnitude == BigInteger.ONE) "" else display.format(magnitude.toString())
+        val top = sign + coefficient + symbol
+        return if (denominator == BigInteger.ONE) top else top + "/" + display.format(denominator.toString())
     }
 
     /** `re + im·i` oppure `re − im·i`. */
@@ -314,6 +375,8 @@ class SolutionFormatter(
         val imaginary = when {
             imText == "1" -> "i"
             '/' in imText -> "($imText)i"
+            // i√3 e 2i√3: la i prima della radice, per non leggere √(3i).
+            '√' in imText -> imText.replace("√", "i√")
             else -> imText + "i"
         }
         if (re.signum() == 0) return if (plus) imaginary else "−$imaginary"

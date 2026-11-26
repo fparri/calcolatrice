@@ -23,6 +23,8 @@ sealed interface CalcKey {
     data object Exp10 : CalcKey
     /** Parentesi "intelligente": apre o chiude in base al contesto. */
     data object Parentheses : CalcKey
+    /** `;`: separa gli argomenti delle funzioni come `log(2;8)` o `nCr(5;2)`. */
+    data object Separator : CalcKey
     data object OpenParen : CalcKey
     data object CloseParen : CalcKey
     data object Backspace : CalcKey
@@ -74,6 +76,29 @@ object ExpressionText {
             }
         }
         return out.toString()
+    }
+
+    /**
+     * La funzione la cui parentesi è ancora aperta più all'interno alla fine di [s]:
+     * il nome (es. `"log"`), `""` per una parentesi semplice, null se nessuna parentesi è aperta.
+     */
+    fun openFunction(s: String): String? {
+        val stack = ArrayDeque<String>()
+        var i = 0
+        while (i < s.length) {
+            val token = FUNCTION_TOKENS.firstOrNull { s.startsWith(it, i) }
+            when {
+                token != null -> {
+                    stack.addLast(token.dropLast(1))
+                    i += token.length
+                    continue
+                }
+                s[i] == '(' -> stack.addLast("")
+                s[i] == ')' -> stack.removeLastOrNull()
+            }
+            i++
+        }
+        return stack.lastOrNull()
     }
 
     /** Il numero che si sta digitando alla fine dell'espressione (può essere vuoto). */
@@ -161,6 +186,7 @@ object CalculatorEditor {
             CalcKey.ExpE -> operandStart(s, "e^(", fresh)
             CalcKey.Exp10 -> operandStart(s, "10^(", fresh)
             CalcKey.Parentheses -> if (fresh) "(" else parentheses(s)
+            CalcKey.Separator -> if (fresh) s else separator(s)
             CalcKey.OpenParen -> operandStart(s, "(", fresh)
             CalcKey.CloseParen -> if (fresh) s else closeParen(s)
             CalcKey.Backspace -> backspace(s, state.ans)
@@ -294,11 +320,11 @@ object CalculatorEditor {
             val trimmed = s.trimEnd { it in OPERATORS }
             return when {
                 trimmed.isEmpty() -> if (op == '-') "-" else ""
-                trimmed.last() == '(' || trimmed.last() == '√' -> if (op == '-') "$trimmed-" else trimmed
+                trimmed.last() in "(;√" -> if (op == '-') "$trimmed-" else trimmed
                 else -> trimmed + op
             }
         }
-        if (last == '(') return if (op == '-') s + op else s
+        if (last == '(' || last == ';') return if (op == '-') s + op else s
         if (last == '√' || last == 'E') return s
         return s + op
     }
@@ -323,6 +349,12 @@ object CalculatorEditor {
             ExpressionText.endsWithOperand(s) -> "$s*("
             else -> "$s("
         }
+    }
+
+    /** `;` solo dopo un argomento completo, dentro una funzione che ne accetta più d'uno. */
+    private fun separator(s: String): String {
+        val function = ExpressionText.openFunction(s)
+        return if (function in Tokenizer.MULTI_ARGUMENT && ExpressionText.endsWithOperand(s)) "$s;" else s
     }
 
     private fun closeParen(s: String): String {

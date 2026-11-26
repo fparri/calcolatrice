@@ -15,7 +15,6 @@ import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.TextUtils
 import android.text.style.ForegroundColorSpan
-import android.util.TypedValue
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -38,6 +37,7 @@ import io.github.calcolatrice.engine.NumberFormat
 import io.github.calcolatrice.engine.ResultFormatter
 import io.github.calcolatrice.engine.SolutionFormatter
 import io.github.calcolatrice.engine.VARIABLES
+import io.github.calcolatrice.ui.FitTextView
 import io.github.calcolatrice.ui.HardwareKeys
 import io.github.calcolatrice.ui.KeyButton
 import io.github.calcolatrice.ui.KeyFactory
@@ -47,6 +47,9 @@ import io.github.calcolatrice.ui.Palette
 import io.github.calcolatrice.ui.Settings
 import io.github.calcolatrice.ui.dp
 import io.github.calcolatrice.ui.errorMessage
+import io.github.calcolatrice.ui.localFunctionNames
+import io.github.calcolatrice.ui.mathEntries
+import io.github.calcolatrice.ui.showMathMenu
 import io.github.calcolatrice.ui.padForSystemBars
 import io.github.calcolatrice.ui.rippleDrawable
 import io.github.calcolatrice.ui.roundedDrawable
@@ -79,8 +82,8 @@ class MainActivity : Activity() {
     private var landscape = false
 
     private lateinit var previousView: TextView
-    private lateinit var mainView: TextView
-    private lateinit var secondaryView: TextView
+    private lateinit var mainView: FitTextView
+    private lateinit var secondaryView: FitTextView
     private lateinit var angleView: TextView
     private lateinit var formatView: TextView
     private lateinit var memoryView: TextView
@@ -94,6 +97,12 @@ class MainActivity : Activity() {
     /** Posizioni nel testo del display, per spostare il cursore toccando lo schermo. */
     private var displayPositions: IntArray? = null
     private var cursorGlyphAt = -1
+
+    /** Inizio della parte di espressione mostrata quando non sta tutta sulla riga (0 = dall'inizio). */
+    private var windowStart = 0
+
+    /** Differenza tra una posizione nel testo mostrato e la stessa nel testo completo (per i tocchi). */
+    private var windowShift = 0
     private var touchX = 0f
     private var touchY = 0f
 
@@ -108,8 +117,8 @@ class MainActivity : Activity() {
         pad = KeyPad(this, palette, ::onAction)
         val symbols = DecimalFormatSymbols.getInstance(resources.configuration.locales[0])
         decimalSeparator = symbols.decimalSeparator
-        formatter = DisplayFormatter(symbols.decimalSeparator, symbols.groupingSeparator)
-        plainFormatter = DisplayFormatter(symbols.decimalSeparator, null)
+        formatter = DisplayFormatter(symbols.decimalSeparator, symbols.groupingSeparator, localFunctionNames())
+        plainFormatter = DisplayFormatter(symbols.decimalSeparator, null, localFunctionNames())
         numberFormat = settings.numberFormat
         asFraction = prefs.getBoolean(PREF_FRACTION, false)
 
@@ -133,6 +142,7 @@ class MainActivity : Activity() {
         val target = when (intent?.action) {
             ACTION_EQUATIONS -> EquationActivity::class.java
             ACTION_STATISTICS -> StatisticsActivity::class.java
+            ACTION_FUNCTIONS -> FunctionActivity::class.java
             else -> return
         }
         startActivity(Intent(this, target))
@@ -170,6 +180,7 @@ class MainActivity : Activity() {
             PadAction.ShowHistory -> showHistory()
             PadAction.ShowMenu -> showMenu()
             PadAction.ShowVariables -> showVariables()
+            PadAction.ShowMath -> showMathMenu(mathEntries(formatter), palette) { onAction(PadAction.Input(it)) }
             PadAction.Solve -> session.solve().also { saveVariables() }
             PadAction.MemoryAdd -> addToMemory(subtract = false)
             PadAction.MemorySubtract -> addToMemory(subtract = true)
@@ -178,7 +189,8 @@ class MainActivity : Activity() {
                 prefs.edit().putBoolean(PREF_FRACTION, asFraction).apply()
             }
             // Azioni delle altre schermate.
-            PadAction.Back, is PadAction.Sheet, is PadAction.SetEquationMode, is PadAction.SetStatMode -> Unit
+            PadAction.Back, is PadAction.Sheet, is PadAction.SetEquationMode, is PadAction.SetStatMode,
+            is PadAction.SetFunctionTab -> Unit
         }
         render()
     }
@@ -231,6 +243,7 @@ class MainActivity : Activity() {
         'l' -> if (session.inverse) CalcKey.ExpE else CalcKey.Function("ln")
         'g' -> if (session.inverse) CalcKey.Exp10 else CalcKey.Function("log")
         'e' -> CalcKey.Constant('e')
+        ';' -> CalcKey.Separator
         else -> null
     }
 
@@ -264,7 +277,9 @@ class MainActivity : Activity() {
         }
         var offset = mainView.getOffsetForPosition(touchX, touchY)
         if (cursorGlyphAt in 0 until offset) offset-- // il cursore disegnato occupa un carattere
-        val index = positions.indices.minByOrNull { kotlin.math.abs(positions[it] - offset) } ?: return
+        // Con l'espressione accorciata la posizione si riporta al testo completo; toccare "…" porta oltre il bordo.
+        val target = offset + windowShift
+        val index = positions.indices.minByOrNull { kotlin.math.abs(positions[it] - target) } ?: return
         session.moveCursorTo(index)
         render()
     }
@@ -278,27 +293,23 @@ class MainActivity : Activity() {
         val showsResult = calc.justEvaluated && calc.expression == "@" && ans != null
         displayPositions = null
         cursorGlyphAt = -1
+        windowShift = 0
         val main: CharSequence = when {
             showsResult -> {
                 val value = solutions.value(ans, asFraction)
-                session.solvedFor?.let { "$it = $value" } ?: value
+                windowStart = 0
+                displayText(session.solvedFor?.let { "$it = $value" } ?: value, cursorAt = null)
             }
-            calc.expression.isEmpty() -> "0"
+            calc.expression.isEmpty() -> {
+                windowStart = 0
+                "0"
+            }
             else -> {
                 val layout = formatter.layout(calc.expression, ans)
                 displayPositions = layout.positions
-                val cursor = calc.cursor
-                if (cursor == null) {
-                    layout.text
-                } else {
-                    // Cursore visibile solo quando non è in fondo.
-                    val at = layout.positions[cursor.coerceIn(0, layout.positions.size - 1)]
-                    cursorGlyphAt = at
-                    SpannableStringBuilder(layout.text).apply {
-                        insert(at, CURSOR)
-                        setSpan(ForegroundColorSpan(palette.accent), at, at + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-                    }
-                }
+                // Cursore visibile solo quando non è in fondo.
+                val cursor = calc.cursor?.let { layout.positions[it.coerceIn(0, layout.positions.size - 1)] }
+                displayText(layout.text, cursor)
             }
         }
         mainView.text = main
@@ -344,6 +355,29 @@ class MainActivity : Activity() {
                 params.weight = weight
                 mainGridView.layoutParams = params
             }
+        }
+    }
+
+    /**
+     * Testo del display principale, sempre su una riga: le cifre si rimpiccioliscono fino al minimo leggibile,
+     * poi si mostra la parte attorno al cursore (o la fine), con "…" dove l'espressione è tagliata.
+     */
+    private fun displayText(text: String, cursorAt: Int?): CharSequence {
+        val focus = cursorAt ?: text.length
+        val window = mainView.fittingWindow(text, focus, windowStart, extra = if (cursorAt != null) CURSOR else "")
+        val start = window?.start ?: 0
+        val end = window?.end ?: text.length
+        windowStart = start
+        val prefix = if (start > 0) FitTextView.ELLIPSIS else ""
+        val suffix = if (end < text.length) FitTextView.ELLIPSIS else ""
+        windowShift = start - prefix.length
+        val visible = prefix + text.substring(start, end) + suffix
+        if (cursorAt == null) return visible
+        val at = (cursorAt - start + prefix.length).coerceIn(prefix.length, prefix.length + end - start)
+        cursorGlyphAt = at
+        return SpannableStringBuilder(visible).apply {
+            insert(at, CURSOR)
+            setSpan(ForegroundColorSpan(palette.accent), at, at + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         }
     }
 
@@ -446,15 +480,17 @@ class MainActivity : Activity() {
             maxLines = 2
             ellipsize = TextUtils.TruncateAt.END
         }
-        mainView = TextView(this).apply {
+        mainView = FitTextView(this).apply {
             setTextColor(palette.onBackground)
             typeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
             gravity = Gravity.END or Gravity.BOTTOM
-            maxLines = 3
             includeFontPadding = false
-            setAutoSizeTextTypeUniformWithConfiguration(
-                24, if (landscape) 48 else 72, 2, TypedValue.COMPLEX_UNIT_SP,
-            )
+            // Riserva: se il testo superasse comunque la riga, si taglia all'inizio e la fine resta visibile.
+            ellipsize = TextUtils.TruncateAt.START
+            // Una sola riga: le cifre si rimpiccioliscono fino a questo minimo, ancora ben leggibile.
+            if (landscape) setSizeRange(48f, 24f) else setSizeRange(72f, 30f)
+            // La larghezza è nota solo dopo la prima misura: allora si ricalcola il testo.
+            onWidthChanged = { post { render() } }
             // Tocco: sposta il cursore; pressione prolungata: copia il risultato.
             setOnTouchListener { _, event ->
                 if (event.actionMasked == MotionEvent.ACTION_DOWN) {
@@ -469,10 +505,9 @@ class MainActivity : Activity() {
                 true
             }
         }
-        secondaryView = TextView(this).apply {
-            textSize = 26f
+        secondaryView = FitTextView(this).apply {
+            setSizeRange(26f, 16f)
             gravity = Gravity.END
-            maxLines = 1
             ellipsize = TextUtils.TruncateAt.END
             // TalkBack annuncia il risultato quando cambia.
             accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
@@ -521,13 +556,15 @@ class MainActivity : Activity() {
     private fun showMenu() {
         PopupMenu(this, menuButton).apply {
             menu.add(0, MENU_EQUATIONS, 0, R.string.equations)
-            menu.add(0, MENU_STATISTICS, 1, R.string.statistics)
-            menu.add(0, MENU_VARIABLES, 2, R.string.variables)
-            menu.add(0, MENU_FORMAT, 3, R.string.number_format)
+            menu.add(0, MENU_FUNCTIONS, 1, R.string.functions)
+            menu.add(0, MENU_STATISTICS, 2, R.string.statistics)
+            menu.add(0, MENU_VARIABLES, 3, R.string.variables)
+            menu.add(0, MENU_FORMAT, 4, R.string.number_format)
             setOnMenuItemClickListener { item ->
                 when (item.itemId) {
                     MENU_EQUATIONS -> startActivity(Intent(this@MainActivity, EquationActivity::class.java))
                     MENU_STATISTICS -> startActivity(Intent(this@MainActivity, StatisticsActivity::class.java))
+                    MENU_FUNCTIONS -> startActivity(Intent(this@MainActivity, FunctionActivity::class.java))
                     MENU_VARIABLES -> showVariables()
                     MENU_FORMAT -> chooseFormat()
                 }
@@ -754,6 +791,7 @@ class MainActivity : Activity() {
         /** Azioni delle scorciatoie dell'icona (res/xml/shortcuts.xml). */
         const val ACTION_EQUATIONS = "io.github.calcolatrice.action.EQUATIONS"
         const val ACTION_STATISTICS = "io.github.calcolatrice.action.STATISTICS"
+        const val ACTION_FUNCTIONS = "io.github.calcolatrice.action.FUNCTIONS"
 
         private const val CURSOR = "|"
         private const val PREF_ANGLE = "angle_unit"
@@ -765,5 +803,6 @@ class MainActivity : Activity() {
         private const val MENU_STATISTICS = 2
         private const val MENU_VARIABLES = 3
         private const val MENU_FORMAT = 4
+        private const val MENU_FUNCTIONS = 5
     }
 }

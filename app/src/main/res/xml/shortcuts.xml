@@ -27,4 +27,15 @@
             android:targetClass="io.github.calcolatrice.MainActivity"
             android:targetPackage="io.github.calcolatrice" />
     </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/shortcut_functions"
+        android:shortcutId="functions"
+        android:shortcutLongLabel="@string/functions"
+        android:shortcutShortLabel="@string/shortcut_functions_short">
+        <intent
+            android:action="io.github.calcolatrice.action.FUNCTIONS"
+            android:targetClass="io.github.calcolatrice.MainActivity"
+            android:targetPackage="io.github.calcolatrice" />
+    </shortcut>
 </shortcuts>

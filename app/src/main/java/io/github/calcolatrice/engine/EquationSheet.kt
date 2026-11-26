@@ -15,6 +15,9 @@ enum class EquationMode(val equations: Int, val coefficients: Int) {
 
     /** ax³ + bx² + cx + d = 0. */
     CUBIC(1, 4),
+
+    /** ax² + bx + c ⋚ 0; la seconda riga, se compilata, forma un sistema di due disequazioni. */
+    INEQUALITY(2, 3),
     ;
 
     val cellCount: Int get() = equations * coefficients
@@ -24,6 +27,9 @@ sealed interface EquationOutcome {
     data class System(val solution: LinearSolution) : EquationOutcome
     data class Quadratic(val solution: QuadraticSolution) : EquationOutcome
     data class Cubic(val solution: CubicSolution) : EquationOutcome
+
+    /** Soluzioni di una disequazione o, se [system], di un sistema di due disequazioni. */
+    data class Inequality(val solution: SolutionSet, val system: Boolean) : EquationOutcome
 
     /** Errore nel calcolo; [cell] è il coefficiente che non si riesce a calcolare, se è quello il problema. */
     data class Error(val error: CalcError, val cell: Int? = null) : EquationOutcome
@@ -37,6 +43,7 @@ sealed interface EquationOutcome {
 class EquationSheet(
     mode: EquationMode = EquationMode.SYSTEM_2,
     cells: Map<EquationMode, List<String>> = emptyMap(),
+    relations: List<Relation> = emptyList(),
 ) {
     var mode: EquationMode = mode
         private set
@@ -47,6 +54,20 @@ class EquationSheet(
 
     private val cells: Map<EquationMode, MutableList<String>> = EquationMode.entries.associateWith { m ->
         MutableList(m.cellCount) { i -> cells[m]?.getOrNull(i).orEmpty() }
+    }
+
+    /** Verso di ogni disequazione (modalità [EquationMode.INEQUALITY]). */
+    private val relations: MutableList<Relation> =
+        MutableList(EquationMode.INEQUALITY.equations) { relations.getOrNull(it) ?: Relation.GREATER }
+
+    fun relation(row: Int): Relation = relations[row]
+
+    fun relations(): List<Relation> = relations.toList()
+
+    /** Tocco sul segno di una disequazione: > ≥ < ≤. */
+    fun cycleRelation(row: Int) {
+        relations[row] = relations[row].next()
+        outcome = null
     }
 
     /** Espressioni delle celle (vuoto = 0), riga per riga. */
@@ -117,6 +138,18 @@ class EquationSheet(
                     EquationOutcome.Quadratic(QuadraticEquation.solve(values[0], values[1], values[2]))
                 EquationMode.CUBIC ->
                     EquationOutcome.Cubic(CubicEquation.solve(values[0], values[1], values[2], values[3]))
+                EquationMode.INEQUALITY -> {
+                    // La seconda disequazione conta solo se almeno un suo coefficiente è scritto.
+                    val cellsOf = cells.getValue(mode)
+                    val rows = (0 until mode.equations).filter { r ->
+                        r == 0 || (0 until mode.coefficients).any { cellsOf[r * mode.coefficients + it].isNotEmpty() }
+                    }
+                    val sets = rows.map { r ->
+                        val (a, b, c) = values.subList(r * 3, r * 3 + 3)
+                        Inequalities.solve(a, b, c, relations[r])
+                    }
+                    EquationOutcome.Inequality(sets.reduce(Inequalities::intersect), system = rows.size > 1)
+                }
             }
         } catch (e: CalcException) {
             EquationOutcome.Error(e.error)

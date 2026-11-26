@@ -25,8 +25,11 @@ import io.github.calcolatrice.engine.DisplayFormatter
 import io.github.calcolatrice.engine.EquationMode
 import io.github.calcolatrice.engine.EquationOutcome
 import io.github.calcolatrice.engine.EquationSheet
+import io.github.calcolatrice.engine.InequalityText
 import io.github.calcolatrice.engine.LinearSolution
 import io.github.calcolatrice.engine.QuadraticSolution
+import io.github.calcolatrice.engine.Relation
+import io.github.calcolatrice.engine.SolutionSet
 import io.github.calcolatrice.engine.SolutionFormatter
 import io.github.calcolatrice.engine.Vertex
 import io.github.calcolatrice.ui.HardwareKeys
@@ -41,6 +44,7 @@ import io.github.calcolatrice.ui.SheetCommand
 import io.github.calcolatrice.ui.cellBackground
 import io.github.calcolatrice.ui.dp
 import io.github.calcolatrice.ui.errorMessage
+import io.github.calcolatrice.ui.localFunctionNames
 import io.github.calcolatrice.ui.padForSystemBars
 import io.github.calcolatrice.ui.roundedDrawable
 import io.github.calcolatrice.ui.setupEdgeToEdge
@@ -74,6 +78,8 @@ class EquationActivity : Activity() {
     private var modeButtons: List<KeyButton> = emptyList()
     private lateinit var gridView: LinearLayout
     private var cellViews: List<TextView> = emptyList()
+    /** Segni delle disequazioni (> ≥ < ≤), uno per riga, solo nella modalità disequazioni. */
+    private var relationViews: List<TextView> = emptyList()
     private var gridMode: EquationMode? = null
     private lateinit var messageView: TextView
     private lateinit var resultView: TextView
@@ -104,7 +110,7 @@ class EquationActivity : Activity() {
         pad = KeyPad(this, palette, ::onAction)
         val symbols = DecimalFormatSymbols.getInstance(resources.configuration.locales[0])
         decimalSeparator = symbols.decimalSeparator
-        display = DisplayFormatter(symbols.decimalSeparator, symbols.groupingSeparator)
+        display = DisplayFormatter(symbols.decimalSeparator, symbols.groupingSeparator, localFunctionNames())
         solutions = SolutionFormatter(display, settings.numberFormat)
         asFraction = prefs.getBoolean(PREF_FRACTION, true)
 
@@ -194,7 +200,7 @@ class EquationActivity : Activity() {
         val mode = sheet.mode
         if (gridMode != mode) buildGrid(mode)
 
-        titleView.text = getString(formula(mode))
+        titleView.text = formula(mode)
         modeButtons.zip(keys.equationModes(mode)).forEach { (button, key) ->
             if (button.key != key) button.bind(key, palette)
         }
@@ -219,6 +225,12 @@ class EquationActivity : Activity() {
             )
         }
 
+        relationViews.forEachIndexed { row, view ->
+            val relation = sheet.relation(row)
+            view.text = relation.symbol
+            view.contentDescription = getString(R.string.relation_description, row + 1, relationName(relation))
+        }
+
         val description = describe(outcome)
         messageView.text = description.message.orEmpty()
         messageView.visibility = if (description.message == null) View.GONE else View.VISIBLE
@@ -230,12 +242,50 @@ class EquationActivity : Activity() {
         storable = description.values
     }
 
+    private fun relationName(relation: Relation): String = getString(
+        when (relation) {
+            Relation.GREATER -> R.string.relation_greater
+            Relation.GREATER_EQUAL -> R.string.relation_greater_equal
+            Relation.LESS -> R.string.relation_less
+            Relation.LESS_EQUAL -> R.string.relation_less_equal
+        },
+    )
+
     private fun describe(outcome: EquationOutcome?): Description = when (outcome) {
-        null -> Description(getString(R.string.solve_hint), emptyList())
+        null -> Description(
+            getString(if (sheet.mode == EquationMode.INEQUALITY) R.string.inequality_hint else R.string.solve_hint),
+            emptyList(),
+        )
+        is EquationOutcome.Inequality -> describeInequality(outcome.solution, outcome.system)
         is EquationOutcome.Error -> Description(getString(errorMessage(outcome.error)), emptyList())
         is EquationOutcome.System -> describeLinear(outcome.solution, listOf("x", "y", "z"))
         is EquationOutcome.Quadratic -> describeQuadratic(outcome.solution)
         is EquationOutcome.Cubic -> describeCubic(outcome.solution)
+    }
+
+    /** Soluzioni in forma algebrica e, sotto, come intervalli; gli estremi si possono salvare. */
+    private fun describeInequality(solution: SolutionSet, system: Boolean): Description {
+        val italian = resources.configuration.locales[0].language == "it"
+        val text = InequalityText(::value, italianIntervals = italian)
+        val title = if (system) getString(R.string.inequality_system) else null
+        return when {
+            solution.isEmpty -> Description(listOfNotNull(title, getString(R.string.no_solution)).joinToString("\n"), emptyList())
+            solution.isAll -> Description(
+                listOfNotNull(title, getString(R.string.all_real_solutions)).joinToString("\n"),
+                listOf("∀x ∈ ℝ"),
+            )
+            else -> {
+                val bounds = solution.intervals
+                    .flatMap { listOfNotNull(it.low?.value, it.high?.value) }
+                    .distinctBy { it.stripTrailingZeros() }
+                Description(
+                    title,
+                    listOf(text.algebraic(solution).orEmpty()),
+                    text.intervals(solution),
+                    bounds.map { NamedValue("x = ${value(it)}", it) },
+                )
+            }
+        }
     }
 
     private fun describeLinear(solution: LinearSolution, names: List<String>): Description = when (solution) {
@@ -303,11 +353,12 @@ class EquationActivity : Activity() {
         value(v.y),
     )
 
-    private fun formula(mode: EquationMode): Int = when (mode) {
-        EquationMode.SYSTEM_2 -> R.string.formula_system_2
-        EquationMode.SYSTEM_3 -> R.string.formula_system_3
-        EquationMode.QUADRATIC -> R.string.formula_quadratic
-        EquationMode.CUBIC -> R.string.formula_cubic
+    private fun formula(mode: EquationMode): String = when (mode) {
+        EquationMode.SYSTEM_2 -> getString(R.string.formula_system_2)
+        EquationMode.SYSTEM_3 -> getString(R.string.formula_system_3)
+        EquationMode.QUADRATIC -> getString(R.string.formula_quadratic)
+        EquationMode.CUBIC -> getString(R.string.formula_cubic)
+        EquationMode.INEQUALITY -> getString(R.string.formula_inequality, sheet.relation(0).symbol)
     }
 
     // ---------------------------------------------------------------- layout
@@ -417,6 +468,7 @@ class EquationActivity : Activity() {
     private fun buildGrid(mode: EquationMode) {
         gridView.removeAllViews()
         val spacing = dp(6)
+        val inequality = mode == EquationMode.INEQUALITY
         val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         for (c in 0 until mode.coefficients) {
             val label = TextView(this).apply {
@@ -429,10 +481,12 @@ class EquationActivity : Activity() {
             }
             header.addView(label, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { if (c > 0) marginStart = spacing })
         }
+        if (inequality) header.addView(View(this), LinearLayout.LayoutParams(0, 1, RELATION_WEIGHT).apply { marginStart = spacing })
         gridView.addView(header, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
 
         val cellHeight = dp(if (landscape) 38 else 44)
         val cells = ArrayList<TextView>(mode.cellCount)
+        val relations = ArrayList<TextView>()
         for (r in 0 until mode.equations) {
             val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
             for (c in 0 until mode.coefficients) {
@@ -452,9 +506,27 @@ class EquationActivity : Activity() {
                 cells += cell
                 row.addView(cell, LinearLayout.LayoutParams(0, MATCH_PARENT, 1f).apply { if (c > 0) marginStart = spacing })
             }
+            if (inequality) {
+                // Il segno della disequazione: un tocco passa al successivo (> ≥ < ≤).
+                val relation = TextView(this).apply {
+                    gravity = Gravity.CENTER
+                    textSize = 22f
+                    setTextColor(palette.accent)
+                    background = roundedDrawable(palette.panel, dp(12).toFloat())
+                    isClickable = true
+                    isFocusable = true
+                    setOnClickListener {
+                        sheet.cycleRelation(r)
+                        render()
+                    }
+                }
+                relations += relation
+                row.addView(relation, LinearLayout.LayoutParams(0, MATCH_PARENT, RELATION_WEIGHT).apply { marginStart = spacing })
+            }
             gridView.addView(row, LinearLayout.LayoutParams(MATCH_PARENT, cellHeight).apply { topMargin = spacing })
         }
         cellViews = cells
+        relationViews = relations
         gridMode = mode
     }
 
@@ -470,14 +542,22 @@ class EquationActivity : Activity() {
                 val array = savedCells.optJSONArray(mode.name) ?: JSONArray()
                 List(array.length()) { array.getString(it) }
             }
-            EquationSheet(EquationMode.valueOf(saved.getString("mode")), cells)
+            val savedRelations = saved.optJSONArray("relations") ?: JSONArray()
+            val relations = List(savedRelations.length()) { i ->
+                Relation.entries.firstOrNull { it.name == savedRelations.optString(i) } ?: Relation.GREATER
+            }
+            val mode = EquationMode.entries.firstOrNull { it.name == saved.getString("mode") } ?: EquationMode.SYSTEM_2
+            EquationSheet(mode, cells, relations)
         }.getOrElse { EquationSheet() }
     }
 
     private fun saveSheet() {
         val cells = JSONObject()
         EquationMode.entries.forEach { mode -> cells.put(mode.name, JSONArray(sheet.expressions(mode))) }
-        val saved = JSONObject().put("mode", sheet.mode.name).put("cells", cells)
+        val saved = JSONObject()
+            .put("mode", sheet.mode.name)
+            .put("cells", cells)
+            .put("relations", JSONArray(sheet.relations().map { it.name }))
         prefs.edit()
             .putString(PREF_SHEET, saved.toString())
             .putBoolean(PREF_SOLVED, sheet.outcome != null)
@@ -492,5 +572,6 @@ class EquationActivity : Activity() {
         const val KEY_SELECTED = "selected"
         const val LETTERS = "abcd"
         const val SUBSCRIPTS = "₁₂₃"
+        const val RELATION_WEIGHT = 0.6f
     }
 }

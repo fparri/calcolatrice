@@ -17,6 +17,8 @@ data class OneVariableStats(
     val median: BigDecimal,
     val q3: BigDecimal,
     val max: BigDecimal,
+    /** Moda: i valori più frequenti; vuota se tutti i valori compaiono lo stesso numero di volte. */
+    val modes: List<BigDecimal> = emptyList(),
 )
 
 /** Regressione lineare y = a + bx, come la modalità STAT A+BX. */
@@ -35,33 +37,79 @@ data class RegressionStats(
 object Statistics {
     private val MC = MathSupport.MC
 
-    fun oneVariable(values: List<BigDecimal>): OneVariableStats {
-        require(values.isNotEmpty())
-        val n = values.size
+    fun oneVariable(values: List<BigDecimal>): OneVariableStats = weighted(values.map { it to 1L })
+
+    /**
+     * Statistica di dati con frequenze (valore, quante volte compare), senza ripetere i valori:
+     * anche frequenze grandi restano veloci. Con frequenze tutte 1 è la statistica a una variabile.
+     */
+    fun weighted(data: List<Pair<BigDecimal, Long>>): OneVariableStats {
+        val pairs = data.filter { it.second > 0 }
+        require(pairs.isNotEmpty())
+        val n = pairs.sumOf { it.second }
         val count = BigDecimal(n)
-        val sum = values.fold(BigDecimal.ZERO, BigDecimal::add)
-        val sumOfSquares = values.fold(BigDecimal.ZERO) { acc, x -> acc.add(x.multiply(x)) }
+        val sum = pairs.fold(BigDecimal.ZERO) { acc, (x, f) -> acc.add(x.multiply(BigDecimal(f))) }
+        val sumOfSquares = pairs.fold(BigDecimal.ZERO) { acc, (x, f) -> acc.add(x.multiply(x).multiply(BigDecimal(f))) }
         val mean = sum.divide(count, MC)
         // Due passaggi (scarti dalla media): più preciso di Σx² − n·x̄².
-        val squares = values.fold(BigDecimal.ZERO) { acc, x -> acc.add(x.subtract(mean).pow(2), MC) }
-        val sorted = values.sorted()
+        val squares = pairs.fold(BigDecimal.ZERO) { acc, (x, f) ->
+            acc.add(x.subtract(mean).pow(2).multiply(BigDecimal(f)), MC)
+        }
+        val sorted = pairs.sortedBy { it.first }
+        val cumulative = LongArray(sorted.size)
+        var running = 0L
+        sorted.forEachIndexed { i, (_, f) ->
+            running += f
+            cumulative[i] = running
+        }
+        /** Il valore in posizione [k] (da 0) dei dati ordinati, come se ogni valore fosse ripetuto. */
+        fun kth(k: Long): BigDecimal {
+            var low = 0
+            var high = sorted.size - 1
+            while (low < high) {
+                val middle = (low + high) / 2
+                if (cumulative[middle] > k) high = middle else low = middle + 1
+            }
+            return sorted[low].first
+        }
+        /** Mediana delle posizioni [from, to). */
+        fun median(from: Long, to: Long): BigDecimal {
+            val m = to - from
+            return if (m % 2 == 1L) {
+                kth(from + m / 2)
+            } else {
+                kth(from + m / 2 - 1).add(kth(from + m / 2)).divide(BigDecimal(2), MC)
+            }
+        }
         // Quartili come sulle calcolatrici: mediane delle due metà, esclusa la mediana se n è dispari.
-        val lower = sorted.subList(0, n / 2)
-        val upper = sorted.subList((n + 1) / 2, n)
-        val median = median(sorted)
+        val median = median(0, n)
         return OneVariableStats(
-            n = n,
+            n = n.toInt().takeIf { it.toLong() == n } ?: Int.MAX_VALUE,
             sum = MathSupport.checked(sum.round(MC)),
             sumOfSquares = MathSupport.checked(sumOfSquares.round(MC)),
             mean = mean,
             populationSd = MathSupport.sqrt(squares.divide(count, MC)),
             sampleSd = if (n >= 2) MathSupport.sqrt(squares.divide(BigDecimal(n - 1), MC)) else null,
-            min = sorted.first(),
-            q1 = if (lower.isEmpty()) median else median(lower),
+            min = sorted.first().first,
+            q1 = if (n / 2 == 0L) median else median(0, n / 2),
             median = median,
-            q3 = if (upper.isEmpty()) median else median(upper),
-            max = sorted.last(),
+            q3 = if (n / 2 == 0L) median else median((n + 1) / 2, n),
+            max = sorted.last().first,
+            modes = modes(sorted),
         )
+    }
+
+    /** Valori con la frequenza massima; nessuna moda se ci sono più valori tutti con la stessa frequenza. */
+    private fun modes(sorted: List<Pair<BigDecimal, Long>>): List<BigDecimal> {
+        // Valori uguali scritti in righe diverse si sommano (2 e 2,0 sono lo stesso valore).
+        val groups = ArrayList<Pair<BigDecimal, Long>>()
+        for ((x, f) in sorted) {
+            val last = groups.lastOrNull()
+            if (last != null && last.first.compareTo(x) == 0) groups[groups.size - 1] = last.first to last.second + f else groups += x to f
+        }
+        val top = groups.maxOf { it.second }
+        if (groups.size > 1 && groups.all { it.second == top }) return emptyList()
+        return groups.filter { it.second == top }.map { it.first }
     }
 
     /** Retta dei minimi quadrati; servono almeno due punti con x diverse. */
@@ -98,15 +146,14 @@ object Statistics {
         )
     }
 
-    private fun median(sorted: List<BigDecimal>): BigDecimal {
-        val n = sorted.size
-        return if (n % 2 == 1) sorted[n / 2] else sorted[n / 2 - 1].add(sorted[n / 2]).divide(BigDecimal(2), MC)
-    }
 }
 
 /** Tipo di analisi: una colonna di dati oppure coppie (x, y). */
 enum class StatMode(val columns: Int) {
     ONE_VARIABLE(1),
+
+    /** Coppie (valore, frequenza). */
+    FREQUENCY(2),
     REGRESSION(2),
 }
 
@@ -114,7 +161,7 @@ sealed interface StatOutcome {
     data class OneVariable(val stats: OneVariableStats) : StatOutcome
     data class Regression(val stats: RegressionStats) : StatOutcome
 
-    /** Dati insufficienti: nessun dato (una variabile) o meno di due punti (regressione). */
+    /** Dati insufficienti: nessun dato (una variabile, frequenze) o meno di due punti (regressione). */
     data object NotEnoughData : StatOutcome
 
     /** Errore; [row] e [column] indicano la cella da correggere, se è quello il problema. */
@@ -247,6 +294,19 @@ class StatisticsSheet(
             when (mode) {
                 StatMode.ONE_VARIABLE ->
                     if (columns[0].isEmpty()) StatOutcome.NotEnoughData else StatOutcome.OneVariable(Statistics.oneVariable(columns[0]))
+                StatMode.FREQUENCY -> {
+                    // Le frequenze devono essere interi non negativi.
+                    val counts = columns[1].mapIndexed { r, f ->
+                        if (f.signum() < 0 || !MathSupport.isInteger(f)) return StatOutcome.Error(CalcError.UNDEFINED, r, 1)
+                        if (f > MAX_FREQUENCY) return StatOutcome.Error(CalcError.OVERFLOW, r, 1)
+                        f.toLong()
+                    }
+                    if (counts.sum() == 0L) {
+                        StatOutcome.NotEnoughData
+                    } else {
+                        StatOutcome.OneVariable(Statistics.weighted(columns[0].zip(counts)))
+                    }
+                }
                 StatMode.REGRESSION ->
                     if (columns[0].size < 2) {
                         StatOutcome.NotEnoughData
@@ -263,5 +323,8 @@ class StatisticsSheet(
 
     companion object {
         const val MAX_ROWS = 200
+
+        /** Somme di frequenze fino a circa 10¹⁵ restano esatte. */
+        private val MAX_FREQUENCY = BigDecimal("1E12")
     }
 }

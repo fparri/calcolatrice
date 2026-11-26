@@ -182,5 +182,61 @@ internal object BigMath {
 
     fun acos(x: BigDecimal): BigDecimal = HALF_PI.subtract(asin(x), WORK)
 
+    private val SQRT_PI: BigDecimal by lazy { sqrt(PI) }
+
+    /**
+     * Funzione d'errore complementare erfc(x) = 1 − erf(x), per la distribuzione normale.
+     * Per |x| < 3 si usa la serie di erf (si perdono al più 4 delle 50 cifre); nelle code la frazione
+     * continua, che calcola erfc direttamente e mantiene tutte le cifre anche per valori minuscoli.
+     */
+    fun erfc(x: BigDecimal): BigDecimal {
+        if (x.signum() < 0) return TWO.subtract(erfc(x.negate()), WORK)
+        if (x.signum() == 0) return BigDecimal.ONE
+        val x2 = x.multiply(x, WORK)
+        // Oltre x ≈ 151,7 erfc(x) < 10⁻¹⁰⁰⁰⁰: sotto la soglia dei numeri gestiti.
+        if (x2 > BigDecimal(23_030)) return BigDecimal.ZERO
+        return if (x < BigDecimal(3)) BigDecimal.ONE.subtract(erfSeries(x, x2), WORK) else erfcFraction(x, x2)
+    }
+
+    /** erf(x) = 2/√π · e^(−x²) · Σ 2ⁿ x^(2n+1) / (1·3·…·(2n+1)): termini tutti positivi, nessuna cancellazione. */
+    private fun erfSeries(x: BigDecimal, x2: BigDecimal): BigDecimal {
+        val twoX2 = x2.multiply(TWO, WORK)
+        var term = x
+        var sum = x
+        var n = 0
+        while (true) {
+            term = term.multiply(twoX2, WORK).divide(BigDecimal(2 * n + 3), WORK)
+            if (term < EPSILON) break
+            sum = sum.add(term, WORK)
+            n++
+        }
+        return sum.multiply(exp(x2.negate()), WORK).multiply(TWO, WORK).divide(SQRT_PI, WORK)
+    }
+
+    /**
+     * erfc(x) = e^(−x²)/√π · 1/(x + (1/2)/(x + 1/(x + (3/2)/(x + …)))), valutata con il metodo di Lentz.
+     */
+    private fun erfcFraction(x: BigDecimal, x2: BigDecimal): BigDecimal {
+        val tiny = BigDecimal("1E-200")
+        val tolerance = BigDecimal("1E-52")
+        var f = x
+        var c = x
+        var d = BigDecimal.ZERO
+        var n = 1
+        while (n < 20_000) {
+            val a = BigDecimal(n).divide(TWO, WORK)
+            d = x.add(a.multiply(d, WORK), WORK)
+            if (d.signum() == 0) d = tiny
+            c = x.add(a.divide(c, WORK), WORK)
+            if (c.signum() == 0) c = tiny
+            d = BigDecimal.ONE.divide(d, WORK)
+            val delta = c.multiply(d, WORK)
+            f = f.multiply(delta, WORK)
+            if (delta.subtract(BigDecimal.ONE).abs() < tolerance) break
+            n++
+        }
+        return exp(x2.negate()).divide(SQRT_PI.multiply(f, WORK), WORK)
+    }
+
     private fun BigDecimal.shiftLeft(n: Int): BigDecimal = this.multiply(TWO.pow(n))
 }

@@ -1,6 +1,7 @@
 package io.github.calcolatrice.engine
 
 import java.math.BigDecimal
+import java.math.MathContext
 import java.math.RoundingMode
 
 /**
@@ -16,12 +17,29 @@ object NumericSolver {
     /** Passo relativo per la derivata numerica (differenze centrali). */
     private val DERIVATIVE_STEP = BigDecimal("1E-12")
 
+    /** Se la derivata risulta zero il passo cresce di questo fattore, fino a [MAX_DERIVATIVE_STEP]. */
+    private val STEP_GROWTH = BigDecimal("1E3")
+    private val MAX_DERIVATIVE_STEP = BigDecimal("1E-3")
+
     /** Passo relativo sotto il quale il metodo di Newton si considera arrivato. */
     private val STEP_TOLERANCE = BigDecimal("1E-30")
 
-    /** |f| finale accettato, relativo al valore di partenza: esclude i "falsi zeri" vicino ai poli. */
-    private val ACCEPT = BigDecimal("1E-20")
+    /**
+     * Uno zero senza cambio di segno (come per (X−1)²) è accettato solo se |f| è al livello del rumore
+     * di arrotondamento: questa frazione della grandezza dei termini sommati nell'espressione.
+     */
+    private val NOISE = BigDecimal("1E-31")
+
+    /** Ampiezza relativa dell'intorno in cui si cerca un cambio di segno attorno a uno zero trovato. */
+    private val SIGN_CHECK = BigDecimal("1E-25")
+
     private val POLE_CHECK = BigDecimal("1E-12")
+
+    /** Ricerca del cambio di segno: passi che raddoppiano, fino a circa 10⁴⁰ volte il passo iniziale. */
+    private const val BRACKET_STEPS = 140
+
+    /** Valore di f in un punto, con la grandezza dei termini sommati per stimare il rumore. */
+    private class Sample(val value: BigDecimal, val magnitude: BigDecimal)
 
     fun solve(
         expression: String,
@@ -39,9 +57,11 @@ object NumericSolver {
         if (tokens.none { it is Token.Variable && it.name == unknown }) return EvalResult.Failure(CalcError.NO_SOLUTION)
 
         // f(x) = valore dell'espressione; null fuori dal dominio. Gli errori di sintassi fermano tutto.
-        val f: (BigDecimal) -> BigDecimal? = { x ->
+        val sample: (BigDecimal) -> Sample? = { x ->
             try {
-                Parser(tokens, angleUnit, ans, variables + (unknown to x)).parse()
+                val parser = Parser(tokens, angleUnit, ans, variables + (unknown to x))
+                val value = parser.parse()
+                Sample(value, parser.magnitude.max(value.abs()))
             } catch (e: CalcException) {
                 if (e.error == CalcError.SYNTAX) throw e
                 null
@@ -50,63 +70,118 @@ object NumericSolver {
             }
         }
         return try {
-            val root = newton(f, start) ?: bracket(f, start) ?: return EvalResult.Failure(CalcError.NO_SOLUTION)
-            EvalResult.Success(tidy(f, root))
+            val root = newton(sample, start) ?: bracket(sample, start) ?: return EvalResult.Failure(CalcError.NO_SOLUTION)
+            EvalResult.Success(tidy({ sample(it)?.value }, root))
         } catch (e: CalcException) {
             EvalResult.Failure(e.error)
         }
     }
 
-    private fun newton(f: (BigDecimal) -> BigDecimal?, start: BigDecimal): BigDecimal? {
+    /**
+     * Zero di f nell'intervallo [a, b], se f cambia segno agli estremi (usato dalla schermata Funzioni).
+     * Restituisce null se non c'è cambio di segno o se il cambio di segno è un polo.
+     */
+    fun rootBetween(f: (BigDecimal) -> BigDecimal?, a: BigDecimal, b: BigDecimal): BigDecimal? {
+        val fa = f(a) ?: return null
+        val fb = f(b) ?: return null
+        if (fa.signum() == 0) return a
+        if (fb.signum() == 0) return b
+        if (fa.signum() == fb.signum()) return null
+        return refine(f, a, fa, b, fb)?.let { tidy(f, it) }
+    }
+
+    private fun newton(f: (BigDecimal) -> Sample?, start: BigDecimal): BigDecimal? {
         var x = start
-        var fx = f(x) ?: return null
+        var current = f(x) ?: return null
+        var fx = current.value
         if (fx.signum() == 0) return x
-        val limit = fx.abs().max(BigDecimal.ONE).multiply(ACCEPT)
         repeat(100) {
             val scale = x.abs().max(BigDecimal.ONE)
-            val h = scale.multiply(DERIVATIVE_STEP)
-            val ahead = f(x.add(h)) ?: return null
-            val behind = f(x.subtract(h)) ?: return null
-            val derivative = ahead.subtract(behind).divide(h.multiply(TWO), MC)
-            if (derivative.signum() == 0) return null
+            val derivative = derivative(f, x, scale) ?: return null
             val step = fx.divide(derivative, MC)
 
             // Passo smorzato: si dimezza finché |f| non diminuisce.
             var t = BigDecimal.ONE
             var next: BigDecimal? = null
-            var fNext: BigDecimal? = null
+            var nextSample: Sample? = null
             for (attempt in 0 until 40) {
                 val candidate = x.subtract(step.multiply(t, MC), MC)
                 val value = f(candidate)
-                if (value != null && value.abs() < fx.abs()) {
+                if (value != null && value.value.abs() < fx.abs()) {
                     next = candidate
-                    fNext = value
+                    nextSample = value
                     break
                 }
                 t = t.divide(TWO)
             }
-            // Nessun miglioramento possibile: o si è arrivati al limite di precisione o si è in un minimo.
-            if (next == null || fNext == null) return if (fx.abs() <= limit) x else null
+            // Nessun miglioramento possibile: o si è arrivati al limite di precisione o si è in un minimo di |f|.
+            if (next == null || nextSample == null) return accept(f, x, current)
 
             val moved = x.subtract(next).abs()
             x = next
-            fx = fNext
-            if (fx.signum() == 0 || moved <= scale.multiply(STEP_TOLERANCE)) {
-                return if (fx.abs() <= limit) x else null
-            }
+            current = nextSample
+            fx = current.value
+            if (fx.signum() == 0 || moved <= scale.multiply(STEP_TOLERANCE)) return accept(f, x, current)
         }
-        return null
+        // Zeri multipli: Newton converge lentamente, ma dopo 100 passi si è comunque molto vicini.
+        return accept(f, x, current)
+    }
+
+    /**
+     * Derivata numerica con differenze centrali. Se f è molto grande rispetto al passo (per esempio
+     * X − 10²⁵ vicino a 0), x ± h si perde nell'arrotondamento e la derivata risulta zero:
+     * allora il passo cresce finché la differenza diventa visibile.
+     */
+    private fun derivative(f: (BigDecimal) -> Sample?, x: BigDecimal, scale: BigDecimal): BigDecimal? {
+        var h = scale.multiply(DERIVATIVE_STEP)
+        val maxStep = scale.multiply(MAX_DERIVATIVE_STEP)
+        while (true) {
+            val ahead = f(x.add(h)) ?: return null
+            val behind = f(x.subtract(h)) ?: return null
+            val derivative = ahead.value.subtract(behind.value).divide(h.multiply(TWO), MC)
+            if (derivative.signum() != 0) return derivative
+            if (h >= maxStep) return null
+            h = h.multiply(STEP_GROWTH)
+        }
+    }
+
+    /**
+     * Il punto in cui Newton si è fermato, se è uno zero; altrimenti un valore arrotondato vicino
+     * in cui f vale esattamente 0 (zeri multipli come X², dove Newton si avvicina solo lentamente), o null.
+     */
+    private fun accept(f: (BigDecimal) -> Sample?, x: BigDecimal, sample: Sample): BigDecimal? {
+        if (isRoot(f, x, sample)) return x
+        val candidates = listOf(
+            x.setScale(0, RoundingMode.HALF_EVEN),
+            x.round(MathContext(20, RoundingMode.HALF_EVEN)),
+        )
+        return candidates.firstOrNull { f(it)?.value?.signum() == 0 }
+    }
+
+    /**
+     * Il punto trovato è davvero uno zero? Sì se f vale 0, se f cambia segno in un intorno minuscolo
+     * oppure se |f| è al livello del rumore di arrotondamento (zeri "tangenti" come in (X−1)²).
+     * Così (X−1)² + 10⁻³⁰, sempre positiva, non ha soluzioni.
+     */
+    private fun isRoot(f: (BigDecimal) -> Sample?, x: BigDecimal, sample: Sample): Boolean {
+        val fx = sample.value
+        if (fx.signum() == 0) return true
+        if (fx.abs() <= sample.magnitude.multiply(NOISE)) return true
+        val delta = x.abs().max(BigDecimal.ONE).multiply(SIGN_CHECK)
+        val left = f(x.subtract(delta))?.value ?: return false
+        val right = f(x.add(delta))?.value ?: return false
+        return left.signum() != fx.signum() || right.signum() != fx.signum()
     }
 
     /** Cerca un cambio di segno a destra e a sinistra del punto di partenza, a passi crescenti. */
-    private fun bracket(f: (BigDecimal) -> BigDecimal?, start: BigDecimal): BigDecimal? {
-        val growth = BigDecimal("1.6")
+    private fun bracket(sample: (BigDecimal) -> Sample?, start: BigDecimal): BigDecimal? {
+        val f: (BigDecimal) -> BigDecimal? = { sample(it)?.value }
         var delta = start.abs().max(BigDecimal.ONE).divide(BigDecimal(100))
         var rightX = start
         var rightF = f(start)
         var leftX = start
         var leftF = rightF
-        repeat(110) {
+        repeat(BRACKET_STEPS) {
             val rx = start.add(delta)
             val rf = f(rx)
             if (rf != null && rf.signum() == 0) return rx
@@ -121,7 +196,7 @@ object NumericSolver {
             leftX = lx
             leftF = lf
 
-            delta = delta.multiply(growth, MC)
+            delta = delta.multiply(TWO, MC)
         }
         return null
     }
@@ -170,7 +245,7 @@ object NumericSolver {
         val fr = f(root)?.abs() ?: return root.round(MC)
         val candidates = listOf(
             root.setScale(0, RoundingMode.HALF_EVEN),
-            root.round(java.math.MathContext(20, RoundingMode.HALF_EVEN)),
+            root.round(MathContext(20, RoundingMode.HALF_EVEN)),
         )
         for (candidate in candidates) {
             val value = f(candidate) ?: continue

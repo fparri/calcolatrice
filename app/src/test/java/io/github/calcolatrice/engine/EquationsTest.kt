@@ -132,7 +132,10 @@ class EquationsTest {
         assertEquals("−5/2", f.value(n("-2.5"), asFraction = true))
         assertEquals("1/3", f.value(n("1/3"), asFraction = true))
         assertEquals("0,333333333333333", f.value(n("1/3"), asFraction = false))
-        assertEquals("1,4142135623731", f.value(n("√2"), asFraction = true))
+        // Con la forma esatta anche i radicali: √2 resta √2 (prima era decimale).
+        assertEquals("√2", f.value(n("√2"), asFraction = true))
+        assertEquals("1,4142135623731", f.value(n("√2"), asFraction = false))
+        assertEquals("3,14159265358979", f.value(n("π"), asFraction = false))
         assertEquals("1.000.000/3", f.value(n("1000000/3"), asFraction = true))
         assertEquals("−1 + 2i", f.complex(n("-1"), n("2"), plus = true, asFraction = false))
         assertEquals("−1 − 2i", f.complex(n("-1"), n("2"), plus = false, asFraction = false))

@@ -17,11 +17,19 @@ gradle/libs.versions.toml          Versioni di plugin e librerie
 app/build.gradle.kts               Configurazione dell'app e della firma
 app/src/main/java/io/github/calcolatrice/
 ├── MainActivity.kt                Calcolatrice: display con cursore, menu, variabili, cronologia, salvataggio
-├── EquationActivity.kt            Equazioni e sistemi: tabella dei coefficienti e risultati
+├── EquationActivity.kt            Equazioni, sistemi e disequazioni: tabella dei coefficienti e risultati
+├── FunctionActivity.kt            Funzioni e grafici: tabella dei valori, grafico, analisi
 ├── StatisticsActivity.kt          Statistica: tabella dei dati e risultati
 ├── engine/                        Motore di calcolo (Kotlin puro, senza Android)
 │   ├── Evaluator.kt               Tokenizer, parser ed esecuzione delle espressioni, variabili
-│   ├── BigMath.kt                 exp, ln, sin/cos, atan, √ in BigDecimal a 50 cifre
+│   ├── BigMath.kt                 exp, ln, sin/cos, atan, √, erfc in BigDecimal a 50 cifre
+│   ├── MoreMath.kt                Menu MATH: radice n-esima, log in base b, nCr, nPr, MCD, mcm, binomiale, normale
+│   ├── ExactForms.kt              Forme esatte dei risultati: p/q, (p/q)·√r, (p/q)·π
+│   ├── Inequalities.kt            Disequazioni di 1° e 2° grado, insiemi di intervalli, sistemi, testo delle soluzioni
+│   ├── FastEval.kt                Valutazione in double di f(X) per i grafici, con la stessa grammatica del parser
+│   ├── FunctionAnalysis.kt        Derivata, integrale, zeri e tabella di f(X) a 34 cifre
+│   ├── FunctionSheet.kt           Stato della schermata funzioni (caselle, vista, analisi)
+│   ├── TextWindow.kt              Parte di un testo da mostrare su una riga troppo corta
 │   ├── CalculatorEditor.kt        Regole di inserimento dei tasti e cursore
 │   ├── CalculatorSession.kt       Stato della calcolatrice: cronologia, variabili, memoria, SOLVE
 │   ├── Solver.kt                  SOLVE: Newton smorzato, poi ricerca di un cambio di segno
@@ -34,7 +42,9 @@ app/src/main/java/io/github/calcolatrice/
     ├── Keys.kt                    Definizione dei tasti e delle azioni
     ├── KeyPad.kt                  Costruzione di righe e griglie di tasti, tastiera fisica
     ├── Settings.kt                Formato dei numeri e variabili, condivisi tra le schermate
-    ├── Dialogs.kt                 Dialoghi "salva in una variabile" e "formato dei numeri"
+    ├── Dialogs.kt                 Dialoghi "salva in una variabile", "formato dei numeri" e menu MATH
+    ├── FitTextView.kt             Testo su una riga che si rimpicciolisce fino a una dimensione minima
+    ├── GraphView.kt               Grafico disegnato a mano: assi, griglia, curva, trascinamento, zoom, lettura dei punti
     └── ViewUtils.kt               Edge-to-edge, insets, sfondi e altre utilità condivise
 app/src/main/res/                  Testi (it/en), colori, icone, tema di sistema
 app/src/test/                      Test unitari del motore di calcolo
@@ -46,6 +56,10 @@ L'editor costruisce un testo che il parser valuta a ogni tasto per l'anteprima:
 
 - numeri con il punto decimale, eventualmente `1.5E-7`; operatori `+ - * / ^`; postfissi `!` e `%`
 - `π`, `e`, `@` (risultato precedente, a piena precisione), `√` prefisso, funzioni `sin(` `asin(` `ln(` `log(` ecc.
+- funzioni con più argomenti separati da `;`: `log(b;x)`, `root(n;x)`, `ncr(n;k)`, `npr(n;k)`, `gcd(a;b;…)`,
+  `lcm(a;b;…)`, `binp(n;p;k)`, `binc(n;p;k)`, `normc(a;b)` e `normc(a;b;μ;σ)`, più `abs(`. Il numero di argomenti
+  ammesso è in `Tokenizer.ARITY`; l'editor accetta `;` solo dentro una funzione che ne prevede più d'uno.
+  A schermo i nomi interni diventano `nCr(`, `ⁿ√(`, `NormC(`…, e in italiano `MCD(` e `mcm(` (`localFunctionNames`).
 - variabili `A B C D X Y M` (lettere maiuscole); manca la `E`, che indica l'esponente
 - la moltiplicazione implicita è sempre scritta esplicitamente dall'editor (`2π` → `2*π`)
 
@@ -66,22 +80,71 @@ arcotangente dimezzando l'angolo. Le potenze non intere sono `e^(y·ln x)`; `e^x
 l'esponenziale. Residui come sin(π) ≈ 3·10⁻³⁴ (π stesso ha 34 cifre) vengono azzerati.
 I test in `PrecisionTest` confrontano i risultati con valori di riferimento calcolati a 40 cifre.
 
+### Menu MATH
+
+- **Radice n-esima e log in base b**: `exp(ln x / n)` e `ln x / ln b` a 50 cifre; se il risultato è "tondo"
+  (³√8, log₂ 8) si verifica elevando a potenza e si restituisce il valore esatto.
+- **nCr e nPr**: prodotto esatto con `BigInteger`; prima si stima la grandezza (somma dei logaritmi dei fattori)
+  per dare "Numero troppo grande" senza calcolare numeri enormi.
+- **Binomiale**: coefficiente e potenze in `BigDecimal` a 50 cifre (niente limiti intermedi: C(10⁵, 5·10⁴) è enorme,
+  ma la probabilità no); la cumulativa somma i termini con la ricorrenza P(i+1) = P(i)·(n−i)/(i+1)·p/(1−p). n ≤ 10⁶.
+- **Normale**: Φ tramite `BigMath.erfc`, serie di erf per |x| < 3 e frazione continua (Lentz) nelle code,
+  così anche probabilità come 7,6·10⁻²⁴ hanno tutte le cifre. Valori controllati con mpmath a 60 cifre.
+
+### Forme esatte
+
+`ExactForms` riconosce dal valore a 34 cifre: frazioni (frazioni continue, come prima), radicali (x² è una frazione
+a/b → √(a·b)/b, poi si portano fuori i quadrati) e multipli di π (x/π è una frazione). La tolleranza è quella delle
+frazioni (10⁻²⁰ relativa): un numero digitato con poche cifre non viene scambiato per un radicale. Restano fuori
+le somme di radicali diversi e le forme (a + b√c)/d, che richiederebbero un algoritmo di relazioni intere (PSLQ).
+
+### Disequazioni
+
+`Inequalities.solve` prende le radici da `QuadraticEquation` e controlla il segno del polinomio in un punto interno
+di ogni tratto; le radici stesse soddisfano solo ≥ e ≤. Il risultato è un insieme di intervalli disgiunti
+(`SolutionSet`), e un sistema è l'intersezione dei due insiemi. `InequalityText` lo scrive in forma algebrica
+(`x < −1 ∨ x > 3`, `x ≠ 2`) e come intervalli, all'italiana (`]−∞; −1[`) o all'inglese (`(−∞, −1)`).
+
+### Funzioni e grafici
+
+- **Grafico**: `FastEval` compila l'espressione in funzioni `double` seguendo la stessa grammatica di `Parser`
+  (un test confronta i due motori su molte espressioni). Il grafico campiona un punto per pixel; una curva si spezza
+  quando tra due punti vicini c'è un salto grande e il punto di mezzo non sta tra i due (asintoti).
+- **Derivata**: differenze centrali con due passi di estrapolazione di Richardson (errore ~h⁶). Prima si confrontano
+  derivata destra e sinistra: se sono diverse la funzione non è derivabile (|x| in 0) e si mostra un errore.
+- **Integrale**: Gauss–Legendre a 20 punti adattivo; la stima deve stabilizzarsi sia per f sia per |f|
+  (così ∫₋₁¹ 1/x non risulta 0). Se non basta si usa la quadratura tanh-sinh, che gestisce le singolarità agli estremi
+  (√x, 1/√x, ln x in 0); se nemmeno questa converge il risultato è segnato come approssimato.
+- **Zeri**: 1000 campioni in double per trovare i cambi di segno, poi raffinamento a 34 cifre
+  (`NumericSolver.rootBetween`); i minimi di |f| vicini a zero si verificano con SOLVE (zeri doppi).
+- L'analisi gira in un thread separato: il risultato si mostra solo se nel frattempo non è cambiato nulla.
+
+### Display su una riga
+
+Il display principale è un `FitTextView`: una riga sola, con il testo che si rimpicciolisce tra 72 e 30 sp
+(48 e 24 in orizzontale). Se l'espressione non ci sta nemmeno alla dimensione minima, `TextWindow` sceglie
+la parte da mostrare attorno al cursore (o alla fine), con "…" ai bordi; la finestra resta ferma finché
+il cursore si sposta al suo interno. `windowShift` riporta i tocchi sul display alla posizione nel testo completo.
+
 ### Equazioni e sistemi
 
-- **Sistemi lineari** (`LinearSystem`): eliminazione di Gauss con pivot parziale a 34 cifre. Un pivot o
-  un termine noto residuo sotto 10⁻²⁵ volte la scala dei dati conta come zero: così `1/3`, che a 34 cifre
-  non è un terzo esatto, non fa sembrare risolubile un sistema singolare. Funziona per n qualsiasi;
-  l'interfaccia offre 2 e 3 incognite.
+- **Sistemi lineari** (`LinearSystem`): eliminazione di Gauss con pivot parziale a 34 cifre, dopo aver
+  normalizzato righe e colonne (coefficiente massimo 1 in ognuna): così la soglia di zero non dipende dalla
+  scala dei dati e 10¹⁵x = 10¹⁵ con 10⁻¹⁵y = 2·10⁻¹⁵ si risolve. Un pivot o un termine noto residuo sotto 10⁻²⁵
+  conta come zero: così `1/3`, che a 34 cifre non è un terzo esatto, non fa sembrare risolubile un sistema singolare.
+  Funziona per n qualsiasi; l'interfaccia offre 2 e 3 incognite.
 - **Secondo grado** (`QuadraticEquation`): Δ è calcolato esatto e poi ripulito dagli stessi residui;
   le radici reali usano la formula stabile (`q = −(b + sgn(b)·√Δ)/2`, `x₁ = q/a`, `x₂ = c/q`), che non perde
-  cifre quando b² ≫ 4ac. Con `a = 0` si risolve l'equazione di primo grado.
+  cifre quando b² ≫ 4ac: per questo le radici non vengono mai azzerate perché piccole rispetto all'altra
+  (x² − 10²⁶x + 1 ha radici 10²⁶ e 10⁻²⁶). Con `a = 0` si risolve l'equazione di primo grado.
 - **Frazioni** (`Fractions`): il risultato decimale viene riconosciuto con le frazioni continue, con
   denominatore fino a 1 000 000 e numeratore fino a 12 cifre; altrimenti resta decimale. Non ci sono
   forme esatte con radicali (`(1+√5)/2`): servirebbe un motore simbolico.
 - **Terzo grado** (`CubicEquation`): il discriminante è calcolato esatto; se è zero le radici multiple
   si ottengono con formule esatte (così `(x−2)³` dà esattamente 2). Altrimenti una radice reale si trova
   per bisezione entro il limite di Cauchy e Newton, e le altre due dall'equazione di secondo grado che
-  resta, rifinite con Newton sul polinomio originale.
+  resta, rifinite con Newton sul polinomio originale. Una radice diventa esattamente 0 solo se 0 è davvero
+  una radice (termine noto trascurabile), e solo tante quante la sua molteplicità.
 - **Coefficienti**: ogni cella è un'espressione modificata con `CalculatorEditor`, quindi segue le stesse
   regole della calcolatrice. Le celle sono salvate in `SharedPreferences` (file `equations`).
 
@@ -89,15 +152,24 @@ I test in `PrecisionTest` confrontano i risultati con valori di riferimento calc
 
 `NumericSolver` cerca uno zero dell'espressione nella variabile X: prima il metodo di Newton con
 derivata numerica e passo smorzato (si dimezza finché |f| non diminuisce), poi, se non converge,
-cerca un cambio di segno allontanandosi dal valore iniziale e lo restringe alternando bisezione e
-secante. Un cambio di segno attraverso un polo (come 1/X) viene scartato controllando |f| alla fine.
-Se un valore più "pulito" (intero, o con meno cifre) va bene almeno quanto, si usa quello.
+cerca un cambio di segno allontanandosi dal valore iniziale a passi che raddoppiano (fino a circa 10⁴⁰)
+e lo restringe alternando bisezione e secante. Un cambio di segno attraverso un polo (come 1/X)
+viene scartato controllando |f| alla fine. Se un valore più "pulito" (intero, o con meno cifre) va bene
+almeno quanto, si usa quello.
+
+- Se la derivata numerica risulta zero perché f è enorme rispetto al passo (X − 10²⁵ vicino a 0),
+  il passo cresce finché la differenza diventa visibile.
+- Uno zero senza cambio di segno è accettato solo se |f| è al livello del rumore di arrotondamento:
+  10⁻³¹ volte il più grande termine sommato nell'espressione (`Parser.magnitude`). Così `(X − 1)² + 10⁻³⁰`
+  non ha soluzioni, mentre `(X − 1)²` e `sin(X) − 1` sì.
 
 ### Statistica
 
 `Statistics` calcola media e deviazioni standard in due passaggi (scarti dalla media, più preciso di
 Σx² − n·x̄²) e i quartili come le calcolatrici: mediane delle due metà, esclusa la mediana se n è
-dispari. `StatisticsSheet` tiene una tabella per modalità, con una riga vuota finale per aggiungere
+dispari. Tutto passa da `Statistics.weighted` (coppie valore–frequenza): i quartili si leggono con le
+frequenze cumulate, senza ripetere i valori, quindi anche frequenze di miliardi restano veloci.
+La moda è vuota se tutti i valori hanno la stessa frequenza. `StatisticsSheet` tiene una tabella per modalità, con una riga vuota finale per aggiungere
 dati (massimo 200 righe). I dati sono salvati nel file `statistics`.
 
 ### Dati salvati
@@ -105,12 +177,13 @@ dati (massimo 200 righe). I dati sono salvati nel file `statistics`.
 | File `SharedPreferences` | Contenuto |
 |---|---|
 | `calculator` | calcolo in corso, cronologia, unità angolare, formato dei numeri, variabili, frazioni sì/no |
-| `equations` | coefficienti di ogni modalità, modalità scelta, frazioni sì/no |
+| `equations` | coefficienti di ogni modalità, segni delle disequazioni, modalità scelta, frazioni sì/no |
 | `statistics` | dati di ogni modalità, modalità scelta |
+| `functions` | funzione, parametri di tabella e analisi, vista scelta, gradi o radianti |
 
 ### Scorciatoie dell'icona
 
-`res/xml/shortcuts.xml` definisce le scorciatoie "Equazioni" e "Statistica". Aprono `MainActivity`
+`res/xml/shortcuts.xml` definisce le scorciatoie "Equazioni", "Statistica" e "Funzioni". Aprono `MainActivity`
 (l'unica schermata esportata) con un'azione, e `MainActivity` passa alla schermata richiesta.
 **Se cambi `applicationId`, aggiorna anche `targetPackage` in `shortcuts.xml`.**
 
