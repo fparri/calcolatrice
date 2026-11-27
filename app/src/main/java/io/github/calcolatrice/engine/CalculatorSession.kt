@@ -13,6 +13,8 @@ class CalculatorSession(
     calc: CalculatorState = CalculatorState(),
     angleUnit: AngleUnit = AngleUnit.DEGREES,
     var inverse: Boolean = false,
+    /** Modalità "come Casio": il tasto ÷ scrive una frazione su due livelli. */
+    var divisionMakesFraction: Boolean = false,
     history: List<HistoryEntry> = emptyList(),
     lastExpression: String? = null,
     variables: Map<Char, BigDecimal> = emptyMap(),
@@ -38,7 +40,7 @@ class CalculatorSession(
 
     /** Applica un tasto. Restituisce true se la cronologia è cambiata (va salvata). */
     fun onKey(key: CalcKey): Boolean {
-        val transition = CalculatorEditor.onKey(calc, key, angleUnit, variables)
+        val transition = CalculatorEditor.onKey(calc, key, angleUnit, variables, divisionMakesFraction)
         val completed = transition.completed
         calc = transition.state
         lastExpression = when {

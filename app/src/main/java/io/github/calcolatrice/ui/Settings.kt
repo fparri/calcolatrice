@@ -23,6 +23,11 @@ class Settings(context: Context) {
         get() = ColorTheme.parse(prefs.getString(KEY_COLORS, null))
         set(value) = prefs.edit().putString(KEY_COLORS, value.code).apply()
 
+    /** Come si scrivono le frazioni su due livelli nella calcolatrice (menu ⋮ → Scrittura delle frazioni). */
+    var divisionMakesFraction: Boolean
+        get() = prefs.getBoolean(KEY_FRACTION_INPUT, false)
+        set(value) = prefs.edit().putBoolean(KEY_FRACTION_INPUT, value).apply()
+
     /** Variabili A, B, C, D, X, Y (assenti = 0). */
     var variables: Map<Char, BigDecimal>
         get() = runCatching {
@@ -46,5 +51,6 @@ class Settings(context: Context) {
         private const val KEY_FORMAT = "number_format"
         private const val KEY_VARIABLES = "variables"
         private const val KEY_COLORS = "color_theme"
+        private const val KEY_FRACTION_INPUT = "division_makes_fraction"
     }
 }

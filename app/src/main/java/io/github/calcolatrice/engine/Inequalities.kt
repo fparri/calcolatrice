@@ -39,8 +39,11 @@ data class SolutionSet(val intervals: List<Interval>) {
     }
 }
 
+/** Soluzioni di una disequazione fratta e valori esclusi perché annullano il denominatore. */
+data class RationalSolution(val solution: SolutionSet, val excluded: List<BigDecimal>)
+
 /**
- * Disequazioni polinomiali di primo e secondo grado e loro sistemi.
+ * Disequazioni polinomiali di primo e secondo grado, fratte e loro sistemi.
  * Le radici vengono dalle equazioni ([QuadraticEquation]); il segno tra una radice e l'altra
  * si controlla calcolando il polinomio in un punto interno, quindi il metodo vale per ogni grado.
  */
@@ -49,24 +52,65 @@ object Inequalities {
 
     /** Risolve ax² + bx + c [relation] 0 (con a = 0: disequazione di primo grado). */
     fun solve(a: BigDecimal, b: BigDecimal, c: BigDecimal, relation: Relation): SolutionSet {
-        val roots = when (val solution = QuadraticEquation.solve(a, b, c)) {
-            is QuadraticSolution.TwoReal -> listOf(solution.x2, solution.x1)
-            is QuadraticSolution.DoubleRoot -> listOf(solution.x)
-            is QuadraticSolution.ComplexPair -> emptyList()
-            is QuadraticSolution.Linear -> when (val linear = solution.solution) {
-                is LinearSolution.Unique -> linear.values
-                // b = 0: il polinomio è la costante c, sempre dello stesso segno.
-                LinearSolution.Infinite, LinearSolution.None -> emptyList()
-            }
-        }
-        return fromRoots(roots.sorted(), relation) { x -> a.multiply(x, MC).add(b, MC).multiply(x, MC).add(c, MC) }
+        val p = polynomial(a, b, c)
+        return fromRoots(roots(a, b, c), relation, sign = { x -> p(x).signum() }, atRoot = { relation.holds(0) })
     }
 
     /**
-     * Costruisce l'insieme a partire dalle radici distinte in ordine crescente: per ogni tratto tra due radici
-     * il segno è quello del polinomio in un punto interno; le radici stesse soddisfano solo ≥ e ≤.
+     * Risolve (ax² + bx + c) / (dx² + ex + f) [relation] 0. Il segno è il prodotto dei segni di numeratore e
+     * denominatore; gli zeri del denominatore non appartengono mai alle soluzioni (condizione di esistenza).
+     * Se il denominatore è il polinomio nullo la disequazione non ha senso: [CalcError.UNDEFINED].
      */
-    internal fun fromRoots(roots: List<BigDecimal>, relation: Relation, p: (BigDecimal) -> BigDecimal): SolutionSet {
+    fun solveRational(numerator: List<BigDecimal>, denominator: List<BigDecimal>, relation: Relation): RationalSolution {
+        val (a, b, c) = numerator
+        val (d, e, f) = denominator
+        if (d.signum() == 0 && e.signum() == 0 && f.signum() == 0) throw CalcException(CalcError.UNDEFINED)
+        val n = polynomial(a, b, c)
+        val den = polynomial(d, e, f)
+        val poles = roots(d, e, f)
+        fun isPole(x: BigDecimal) = poles.any { close(it, x) }
+        // Radici di numeratore e denominatore insieme, senza doppioni (un fattore comune dà lo stesso punto).
+        val all = (poles + roots(a, b, c).filter { !isPole(it) }).sorted()
+        val solution = fromRoots(
+            all,
+            relation,
+            sign = { x -> n(x).signum() * den(x).signum() },
+            atRoot = { x -> !isPole(x) && relation.holds(0) },
+        )
+        return RationalSolution(solution, poles)
+    }
+
+    private fun polynomial(a: BigDecimal, b: BigDecimal, c: BigDecimal): (BigDecimal) -> BigDecimal =
+        { x -> a.multiply(x, MC).add(b, MC).multiply(x, MC).add(c, MC) }
+
+    /** Radici reali distinte di ax² + bx + c, in ordine crescente (nessuna se il polinomio è costante). */
+    private fun roots(a: BigDecimal, b: BigDecimal, c: BigDecimal): List<BigDecimal> = when (val solution = QuadraticEquation.solve(a, b, c)) {
+        is QuadraticSolution.TwoReal -> listOf(solution.x2, solution.x1).sorted()
+        is QuadraticSolution.DoubleRoot -> listOf(solution.x)
+        is QuadraticSolution.ComplexPair -> emptyList()
+        is QuadraticSolution.Linear -> when (val linear = solution.solution) {
+            is LinearSolution.Unique -> linear.values
+            // b = 0: il polinomio è la costante c, sempre dello stesso segno.
+            LinearSolution.Infinite, LinearSolution.None -> emptyList()
+        }
+    }
+
+    /** Stesso punto a meno degli arrotondamenti delle 34 cifre. */
+    private fun close(x: BigDecimal, y: BigDecimal): Boolean =
+        x.subtract(y, MC).abs() <= TOLERANCE.multiply(x.abs().max(BigDecimal.ONE), MC)
+
+    private val TOLERANCE = BigDecimal("1E-25")
+
+    /**
+     * Costruisce l'insieme a partire dalle radici distinte in ordine crescente: per ogni tratto tra due radici
+     * vale il segno ([sign]) in un punto interno; ogni radice appartiene alle soluzioni se [atRoot] lo dice.
+     */
+    internal fun fromRoots(
+        roots: List<BigDecimal>,
+        relation: Relation,
+        sign: (BigDecimal) -> Int,
+        atRoot: (BigDecimal) -> Boolean,
+    ): SolutionSet {
         // Pezzi della retta in ordine: (−∞, r₁), [r₁], (r₁, r₂), [r₂], …, (rₙ, +∞).
         val pieces = ArrayList<Pair<Interval, Boolean>>()
         for (i in 0..roots.size) {
@@ -79,8 +123,8 @@ object Inequalities {
                 else -> low.add(high, MC).divide(BigDecimal(2), MC)
             }
             val region = Interval(low?.let { Bound(it, false) }, high?.let { Bound(it, false) })
-            pieces += region to relation.holds(p(test).signum())
-            if (high != null) pieces += Interval(Bound(high, true), Bound(high, true)) to relation.holds(0)
+            pieces += region to relation.holds(sign(test))
+            if (high != null) pieces += Interval(Bound(high, true), Bound(high, true)) to atRoot(high)
         }
         // Pezzi consecutivi inclusi diventano un solo intervallo.
         val intervals = ArrayList<Interval>()
@@ -99,7 +143,7 @@ object Inequalities {
         return SolutionSet(intervals)
     }
 
-    /** Soluzioni comuni a due disequazioni (sistema). */
+    /** Soluzioni comuni a due disequazioni (sistema; per più disequazioni si applica più volte). */
     fun intersect(x: SolutionSet, y: SolutionSet): SolutionSet {
         val result = ArrayList<Interval>()
         for (i in x.intervals) {

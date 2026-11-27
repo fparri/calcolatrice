@@ -15,6 +15,48 @@ object FractionText {
     /** Numeratore: cifre (con i separatori), √ e π; denominatore: cifre. Il segno meno resta fuori. */
     private val FRACTION = Regex("""(\()?([0-9.,'’  √π]*[0-9π])/([0-9][0-9.,'’  ]*)(\))?""")
 
+    private val INNERMOST = Regex("""\{([^{}~]*)~([^{}~]*)}""")
+    private val SIMPLE = Regex("""[0-9.,'’\u00A0\u202Fπe√A-Z]*[0-9πeA-Z]""")
+
+    /**
+     * Le frazioni su due livelli dell'editor (`{1~2}`, già formattate per lo schermo) scritte su una
+     * riga: `1/2`, oppure `(1+x)/(3)` quando una parte non è un numero o un simbolo solo.
+     */
+    fun linearize(text: String): String {
+        var s = text
+        while (true) {
+            val m = INNERMOST.find(s) ?: return s
+            fun part(p: String) = if (SIMPLE.matches(p)) p else "($p)"
+            s = s.replaceRange(m.range, part(m.groupValues[1]) + "/" + part(m.groupValues[2]))
+        }
+    }
+
+    /**
+     * La posizione più vicina a [index] fuori da ogni frazione `{…~…}`, cercando all'indietro o in avanti:
+     * un pezzo di testo tagliato lì non spezza una frazione.
+     */
+    fun outside(text: CharSequence, index: Int, forward: Boolean): Int {
+        val depth = IntArray(text.length + 1)
+        var d = 0
+        for (k in text.indices) {
+            depth[k] = d
+            if (text[k] == ExpressionText.FRACTION_OPEN) d++
+            if (text[k] == ExpressionText.FRACTION_CLOSE) d = maxOf(0, d - 1)
+        }
+        depth[text.length] = d
+        var i = index.coerceIn(0, text.length)
+        while (depth[i] > 0 && i in 0..text.length) {
+            if (forward) {
+                if (i == text.length) break
+                i++
+            } else {
+                if (i == 0) break
+                i--
+            }
+        }
+        return i
+    }
+
     fun find(text: CharSequence): List<Match> = FRACTION.findAll(text).map { m ->
         val open = m.groups[1]
         val close = m.groups[4]

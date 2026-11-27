@@ -18,6 +18,8 @@ sealed interface PadAction {
     data object ShowMenu : PadAction
     data object ShowVariables : PadAction
     data object ShowMath : PadAction
+    /** Sposta il cursore (frecce accanto all'anteprima, quando ci sono frazioni). */
+    data class MoveCursor(val delta: Int) : PadAction
     data object ToggleFraction : PadAction
     data object Back : PadAction
     data class SetEquationMode(val mode: EquationMode) : PadAction
@@ -53,13 +55,16 @@ class KeyFactory(private val context: Context) {
     private fun fn(label: String, key: CalcKey, description: Int) =
         PadKey(label, input(key), KeyStyle.Function, s(description))
 
-    /** Tastierino principale: 4 colonne × 5 righe. */
-    fun main(decimalSeparator: Char): List<List<PadKey>> = listOf(
+    /**
+     * Tastierino principale: 4 colonne × 5 righe. Con [fractionKey] il tasto ▫/▫ prende il posto di %
+     * (che passa al pannello scientifico); altrimenti ÷ scrive le frazioni (modalità "come Casio").
+     */
+    fun main(decimalSeparator: Char, fractionKey: Boolean = false, divisionMakesFraction: Boolean = false): List<List<PadKey>> = listOf(
         listOf(
             PadKey("AC", input(CalcKey.Clear), KeyStyle.Clear, s(R.string.key_clear)),
             PadKey("( )", input(CalcKey.Parentheses), KeyStyle.Operator, s(R.string.key_parentheses)),
-            PadKey("%", input(CalcKey.Percent), KeyStyle.Operator, s(R.string.key_percent)),
-            op("÷", '/', R.string.key_divide),
+            if (fractionKey) fractionKey(KeyStyle.Operator) else percentKey(KeyStyle.Operator),
+            op("÷", '/', if (divisionMakesFraction) R.string.key_divide_fraction else R.string.key_divide),
         ),
         listOf(digit('7'), digit('8'), digit('9'), op("×", '*', R.string.key_multiply)),
         listOf(digit('4'), digit('5'), digit('6'), op("−", '-', R.string.key_minus)),
@@ -73,6 +78,17 @@ class KeyFactory(private val context: Context) {
             ),
             PadKey("=", input(CalcKey.Equals), KeyStyle.Equals, s(R.string.key_equals)),
         ),
+    )
+
+    private fun percentKey(style: KeyStyle) = PadKey("%", input(CalcKey.Percent), style, s(R.string.key_percent))
+
+    private fun fractionKey(style: KeyStyle) =
+        PadKey("", input(CalcKey.Fraction), style, s(R.string.key_fraction), icon = R.drawable.ic_fraction)
+
+    fun cursorKey(left: Boolean) = PadKey(
+        "", PadAction.MoveCursor(if (left) -1 else 1), KeyStyle.Number,
+        s(if (left) R.string.key_cursor_left else R.string.key_cursor_right),
+        icon = if (left) R.drawable.ic_chevron_left else R.drawable.ic_chevron_right,
     )
 
     fun expandKey(expanded: Boolean) = PadKey(
@@ -105,6 +121,7 @@ class KeyFactory(private val context: Context) {
         Triple(EquationMode.QUADRATIC, R.string.mode_quadratic, R.string.mode_quadratic_description),
         Triple(EquationMode.CUBIC, R.string.mode_cubic, R.string.mode_cubic_description),
         Triple(EquationMode.INEQUALITY, R.string.mode_inequality, R.string.mode_inequality_description),
+        Triple(EquationMode.RATIONAL, R.string.mode_rational, R.string.mode_rational_description),
     ).map { (mode, label, description) ->
         PadKey(s(label), PadAction.SetEquationMode(mode), KeyStyle.Toggle, s(description), active = mode == current)
     }
@@ -168,16 +185,6 @@ class KeyFactory(private val context: Context) {
         active = inverse,
     )
 
-    /** DEG/RAD (schermata Funzioni). */
-    fun angleToggle(angleUnit: AngleUnit): PadKey {
-        val degrees = angleUnit == AngleUnit.DEGREES
-        val name = s(if (degrees) R.string.angle_degrees else R.string.angle_radians)
-        return PadKey(
-            s(if (degrees) R.string.angle_degrees_short else R.string.angle_radians_short),
-            PadAction.ToggleAngle, KeyStyle.Toggle, context.getString(R.string.angle_toggle, name),
-        )
-    }
-
     private fun trigKeys(inverse: Boolean) = if (inverse) {
         listOf(
             fn("sin⁻¹", CalcKey.Function("asin"), R.string.key_asin),
@@ -222,6 +229,7 @@ class KeyFactory(private val context: Context) {
         Triple(FunctionTab.TABLE, R.string.tab_table, R.string.tab_table_description),
         Triple(FunctionTab.GRAPH, R.string.tab_graph, R.string.tab_graph_description),
         Triple(FunctionTab.ANALYSIS, R.string.tab_analysis, R.string.tab_analysis_description),
+        Triple(FunctionTab.STUDY, R.string.tab_study, R.string.tab_study_description),
     ).map { (tab, label, description) ->
         PadKey(s(label), PadAction.SetFunctionTab(tab), KeyStyle.Toggle, s(description), active = tab == current)
     }
@@ -255,17 +263,21 @@ class KeyFactory(private val context: Context) {
      * In verticale: 6 colonne × 3 righe. La prima, sempre visibile, ha le funzioni più usate;
      * le altre si aprono con la maniglia. DEG/RAD è nella barra in alto.
      */
-    fun scientificPortrait(inverse: Boolean): List<List<PadKey>> = listOf(
+    fun scientificPortrait(inverse: Boolean, fractionKey: Boolean = false): List<List<PadKey>> = listOf(
         trigKeys(inverse) + logKeys(inverse) + fn("√", CalcKey.SquareRoot, R.string.key_sqrt),
-        listOf(inverseKey(inverse), piKey(), eKey(), fn("x²", CalcKey.Square, R.string.key_square), powerKey(), factorialKey()),
+        listOf(
+            inverseKey(inverse), piKey(), eKey(), fn("x²", CalcKey.Square, R.string.key_square), powerKey(),
+            // Con il tasto ▫/▫ nel tastierino, % viene qui e x! va nel menu MATH.
+            if (fractionKey) percentKey(KeyStyle.Function) else factorialKey(),
+        ),
         listOf(mathKey(), separatorKey(), reciprocalKey(), nthRootKey(), exponentKey(), variablesKey()),
     )
 
     /** In orizzontale: 4 colonne × 5 righe, allineate al tastierino principale. */
-    fun scientificLandscape(inverse: Boolean): List<List<PadKey>> = listOf(
+    fun scientificLandscape(inverse: Boolean, fractionKey: Boolean = false): List<List<PadKey>> = listOf(
         listOf(inverseKey(inverse), fn("√", CalcKey.SquareRoot, R.string.key_sqrt), fn("x²", CalcKey.Square, R.string.key_square), powerKey()),
         trigKeys(inverse) + piKey(),
-        logKeys(inverse) + eKey() + factorialKey(),
+        logKeys(inverse) + eKey() + if (fractionKey) percentKey(KeyStyle.Function) else factorialKey(),
         listOf(mathKey(), separatorKey(), reciprocalKey(), nthRootKey()),
         listOf(exponentKey(), variableKey('X'), variableKey('Y'), variablesKey()),
     )

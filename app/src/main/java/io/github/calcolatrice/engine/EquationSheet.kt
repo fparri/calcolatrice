@@ -16,8 +16,11 @@ enum class EquationMode(val equations: Int, val coefficients: Int) {
     /** ax³ + bx² + cx + d = 0. */
     CUBIC(1, 4),
 
-    /** ax² + bx + c ⋚ 0; la seconda riga, se compilata, forma un sistema di due disequazioni. */
-    INEQUALITY(2, 3),
+    /** ax² + bx + c ⋚ 0; la seconda e la terza riga, se compilate, formano un sistema. */
+    INEQUALITY(3, 3),
+
+    /** Disequazione fratta (ax² + bx + c) / (dx² + ex + f) ⋚ 0: prima riga numeratore, seconda denominatore. */
+    RATIONAL(2, 3),
     ;
 
     val cellCount: Int get() = equations * coefficients
@@ -28,8 +31,17 @@ sealed interface EquationOutcome {
     data class Quadratic(val solution: QuadraticSolution) : EquationOutcome
     data class Cubic(val solution: CubicSolution) : EquationOutcome
 
-    /** Soluzioni di una disequazione o, se [system], di un sistema di due disequazioni. */
-    data class Inequality(val solution: SolutionSet, val system: Boolean) : EquationOutcome
+    /**
+     * Soluzioni di una disequazione o di un sistema di [count] disequazioni; [excluded] sono gli zeri del
+     * denominatore di una disequazione fratta (condizione di esistenza).
+     */
+    data class Inequality(
+        val solution: SolutionSet,
+        val count: Int = 1,
+        val excluded: List<BigDecimal> = emptyList(),
+    ) : EquationOutcome {
+        val system: Boolean get() = count > 1
+    }
 
     /** Errore nel calcolo; [cell] è il coefficiente che non si riesce a calcolare, se è quello il problema. */
     data class Error(val error: CalcError, val cell: Int? = null) : EquationOutcome
@@ -56,9 +68,12 @@ class EquationSheet(
         MutableList(m.cellCount) { i -> cells[m]?.getOrNull(i).orEmpty() }
     }
 
-    /** Verso di ogni disequazione (modalità [EquationMode.INEQUALITY]). */
+    /**
+     * Verso di ogni disequazione: le righe della modalità [EquationMode.INEQUALITY], poi quello della
+     * disequazione fratta (indice [RATIONAL_RELATION]).
+     */
     private val relations: MutableList<Relation> =
-        MutableList(EquationMode.INEQUALITY.equations) { relations.getOrNull(it) ?: Relation.GREATER }
+        MutableList(EquationMode.INEQUALITY.equations + 1) { relations.getOrNull(it) ?: Relation.GREATER }
 
     fun relation(row: Int): Relation = relations[row]
 
@@ -148,7 +163,11 @@ class EquationSheet(
                         val (a, b, c) = values.subList(r * 3, r * 3 + 3)
                         Inequalities.solve(a, b, c, relations[r])
                     }
-                    EquationOutcome.Inequality(sets.reduce(Inequalities::intersect), system = rows.size > 1)
+                    EquationOutcome.Inequality(sets.reduce(Inequalities::intersect), count = rows.size)
+                }
+                EquationMode.RATIONAL -> {
+                    val r = Inequalities.solveRational(values.subList(0, 3), values.subList(3, 6), relations[RATIONAL_RELATION])
+                    EquationOutcome.Inequality(r.solution, excluded = r.excluded)
                 }
             }
         } catch (e: CalcException) {
@@ -156,5 +175,10 @@ class EquationSheet(
         } catch (e: ArithmeticException) {
             EquationOutcome.Error(CalcError.OVERFLOW)
         }
+    }
+
+    companion object {
+        /** Posizione del verso della disequazione fratta in [relations]. */
+        const val RATIONAL_RELATION = 3
     }
 }

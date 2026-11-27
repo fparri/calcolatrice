@@ -1,4 +1,4 @@
-"""Genera le icone adattive (corallo e azzurra: sfondo e primo piano; monocromatica comune) e le
+"""Genera le icone adattive (corallo, azzurra e grafite: sfondo e primo piano; monocromatica comune) e le
 anteprime SVG, tutte dalla stessa geometria.
 
 Uso: python3 tools/make_icon.py app/src/main/res <cartella delle anteprime>
@@ -12,6 +12,8 @@ OUT = sys.argv[2]
 VARIANTS = {
     "": dict(top="#FF8C61", bottom="#E0483A", tile="#FFFFFF", eq="#FFE58A", ink="#B83A2B", ink_eq="#7A4B00"),
     "_blue": dict(top="#41AEF7", bottom="#1565C8", tile="#FFFFFF", eq="#FFE07A", ink="#1559A8", ink_eq="#6B4E00"),
+    # Grafite: per i colori "dal sistema" (tasti grigi con simboli bianchi, "=" arancione).
+    "_graphite": dict(top="#454952", bottom="#1F2127", tile="#5A5F6A", eq="#FF9F43", ink="#FFFFFF", ink_eq="#3A1E00"),
 }
 
 # Griglia 2×2 di tasti, 48×48 dp al centro della tela da 108: anche gli angoli arrotondati restano

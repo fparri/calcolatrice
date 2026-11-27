@@ -29,16 +29,20 @@ Funziona su **Android 8.0 o successivo**, su telefoni, tablet e Chromebook.
 - **Display su una riga:** le cifre si rimpiccioliscono man mano che l'espressione si allunga.
 - **Cursore:** tocca l'espressione per correggerla in qualunque punto.
 - **Equazioni e sistemi:** sistemi lineari a 2 e 3 incognite, equazioni di secondo e terzo grado.
-- **Disequazioni:** di primo e secondo grado, anche a sistema, con le soluzioni scritte come a scuola.
+- **Disequazioni:** di primo e secondo grado, fratte, e sistemi fino a tre disequazioni, con le soluzioni
+  scritte come a scuola.
 - **Funzioni e grafici:** una o due funzioni insieme, tabella dei valori, grafico da esplorare con le dita,
-  derivata in un punto, integrale definito, zeri e punti d'intersezione in un intervallo.
+  derivata in un punto, integrale definito, zeri e punti d'intersezione in un intervallo, **limiti** (da
+  destra, da sinistra, a ±∞) e lo **studio di
+  funzione** (dominio, simmetrie, segno, crescenza, massimi e minimi, concavità e flessi, asintoti).
 - **Statistica:** media, moda, deviazione standard, quartili, dati con frequenze e retta di regressione.
 - **Gradi e radianti**, con valori esatti per gli angoli notevoli (sin 180° = 0; tan 90° non è definita).
 - **Tutto resta salvato:** il calcolo in corso, la cronologia degli ultimi 100 calcoli, le variabili, i dati.
 - **Numeri scritti come nella tua lingua** (1.234,5 in italiano, 1,234.5 in inglese) ed esponenti
   in apice (3², 10⁻³).
 - **Tema chiaro e scuro** automatici, con tre scelte di colori: **corallo**, **azzurro** e, da Android 12,
-  **dal sistema** (abbinati allo sfondo del telefono). L'icona dell'app segue il colore scelto.
+  **dal sistema** (abbinati allo sfondo del telefono). L'icona dell'app segue il colore scelto (con i colori
+  del sistema è grigio grafite).
 - **Tablet e pieghevoli:** sugli schermi larghi la cronologia resta sempre visibile a fianco.
 - **Italiano e inglese**. Da Android 13 puoi scegliere la lingua solo per questa app dalle impostazioni.
 - **Accessibile con TalkBack:** ogni tasto ha una descrizione e i risultati vengono letti a parole
@@ -103,7 +107,24 @@ radici (`2√2`, `√6/3`) e multipli di π (`3π/4`). La forma esatta si ricono
 
 Sullo schermo le frazioni si scrivono come sul quaderno, con il numeratore sopra la linea di frazione e il
 denominatore sotto (anche `√3/2`, `3π/4` e le parti immaginarie). Quando le copi diventano testo su una riga:
-`3/4`. L'espressione che scrivi resta invece su una riga, come nelle calcolatrici scientifiche più semplici.
+`3/4`.
+
+### Scrivere le frazioni
+
+Anche mentre scrivi le frazioni stanno su due livelli. Ci sono due modi, da scegliere in
+**⋮ → Scrittura delle frazioni**:
+
+| Modo | Come si scrive ¾ + 1 |
+|---|---|
+| **Tasto ▫/▫** (predefinito) | **▫/▫**, `3`, **▶**, `4`, **▶**, `+ 1`. Il tasto ÷ resta la divisione su una riga; % si sposta nel pannello scientifico e x! nel menu MATH. |
+| **Tasto ÷, come sulle Casio** | `3` **÷** `4`, **▶**, `+ 1`. Il ÷ prende come numeratore quello che hai appena scritto (un numero, una parentesi, una potenza…) e porta il cursore nel denominatore. |
+
+- Quando c'è una frazione, accanto all'anteprima compaiono le frecce **◀ ▶** per spostarsi: da numeratore
+  a denominatore e fuori dalla frazione. Una parte ancora vuota si vede come un riquadro.
+- Le frazioni si possono mettere una dentro l'altra e contenere qualunque espressione.
+- **⌫** subito dopo una frazione entra nel denominatore; all'inizio del denominatore torna al numeratore;
+  una frazione vuota sparisce.
+- Nella cronologia e quando copi, le frazioni si scrivono su una riga: `3/4`, `(1+2)/5`.
 
 ### Radice quadrata
 
@@ -184,8 +205,8 @@ minimo (se a > 0) o di massimo (se a < 0).
 Con **Diseq.** risolvi disequazioni del tipo ax² + bx + c > 0 (con a = 0 sono di primo grado).
 
 - Tocca il **segno** a destra della riga per cambiarlo: >, ≥, <, ≤.
-- La **seconda riga è facoltativa** (finché è vuota resta in disparte): se la compili, ottieni le soluzioni
-  comuni alle due disequazioni (sistema).
+- La **seconda e la terza riga sono facoltative** (finché sono vuote restano in disparte): se le compili,
+  ottieni le soluzioni comuni a tutte le disequazioni scritte (sistema di due o tre).
 - Le soluzioni compaiono come a scuola, per esempio `x < −1 ∨ x > 3`, `−√2 < x < √2` o `x ≠ 2`,
   e sotto come intervalli: `]−∞; −1[ ∪ ]3; +∞[`.
 
@@ -196,6 +217,23 @@ Con **Diseq.** risolvi disequazioni del tipo ax² + bx + c > 0 (con a = 0 sono d
 | x² + 1 > 0 | ∀x ∈ ℝ |
 | x² + 1 < 0 | Nessuna soluzione |
 | sistema: x² − 2x − 3 ≥ 0 e x − 5 ≤ 0 | x ≤ −1 ∨ 3 ≤ x ≤ 5 |
+| sistema: x > 0, x − 5 < 0, x² − 4 ≥ 0 | 2 ≤ x < 5 |
+
+### Disequazioni fratte
+
+Con **Fratta** risolvi N(x) / D(x) > 0 (o ≥, <, ≤), con numeratore e denominatore di primo o secondo grado.
+Nella riga **N(x)** scrivi i coefficienti del numeratore, in **D(x)** quelli del denominatore (sotto x², x e 1).
+
+- Il segno della frazione è il prodotto dei segni di numeratore e denominatore.
+- Gli zeri del denominatore non sono mai soluzioni, anche con ≥ o ≤: sopra le soluzioni compare la
+  **condizione di esistenza** (per esempio `x ≠ −2`).
+
+| Disequazione | Soluzioni |
+|---|---|
+| (x − 1)/(x + 2) ≥ 0 | x < −2 ∨ x ≥ 1 |
+| (x + 3)/(x² − 4) < 0 | x < −3 ∨ −2 < x < 2 |
+| (x² − 1)/(x − 1) > 0 | −1 < x < 1 ∨ x > 1 |
+| 1/(x² + 1) > 0 | ∀x ∈ ℝ |
 
 **Forma esatta o decimali:** il chip **Frazioni** in alto a destra passa dai risultati in forma esatta
 (`x = −3/4`, `x = √2`, `x = −1/2 + (√3/2)i`) a quelli decimali (`x = −0,75`) e viceversa.
@@ -229,6 +267,43 @@ nella casella `g(x) =` (è facoltativa). Sotto scegli una delle tre viste:
 - Gli integrali funzionano anche con estremi difficili, come ∫₀¹ 1/√x dx = 2. Se l'integrale non esiste
   (come ∫₀¹ 1/x dx) il valore compare con **≈** e un avviso.
 - Tocca i risultati dell'analisi per salvarne uno in una variabile.
+
+### Limiti
+
+Nella vista **Analisi**, sotto x₀, a e b, il chip **Limite** sceglie il verso: un tocco passa da `x → x₀`
+(entrambi i lati) a `x → x₀⁻` (da sinistra), `x → x₀⁺` (da destra), `x → +∞` e `x → −∞`. Premendo **=**
+ottieni anche il limite di f.
+
+| Esempio | Risultato |
+|---|---|
+| sin(x)/x per x → 0 | ≈ 1 |
+| (sin x − x)/x³ per x → 0 | ≈ −1/6 |
+| 1/x per x → 0 | da sinistra −∞, da destra +∞: il limite non esiste |
+| ln x per x → 0⁺ | −∞ (da verificare: cresce lentamente) |
+| sin(1/x) per x → 0 | non esiste, la funzione oscilla |
+
+Il limite è calcolato numericamente (valori di f sempre più vicini a x₀, a 34 cifre, con estrapolazione):
+per questo c'è sempre **≈**, e **da verificare** quando la convergenza è troppo lenta per esserne sicuri.
+Serve per controllare un limite fatto a mano, non al posto del procedimento.
+
+### Studio di funzione
+
+Nella vista **Studio** scegli l'intervallo (da −10 a 10 se non lo cambi) e premi **=**. In qualche secondo
+ottieni, nell'ordine del quaderno: dominio, simmetrie (pari o dispari), intersezioni con gli assi, segno,
+dove la funzione cresce e decresce con massimi e minimi, concavità e flessi, asintoti. Nel **Grafico** i
+punti trovati vengono segnati: massimi e minimi pieni, flessi vuoti, asintoti tratteggiati.
+
+Lo studio è numerico, quindi ogni parte dice quanto è affidabile:
+
+| Segno | Significa | Parti |
+|---|---|---|
+| nessuno | calcolato con certezza, a 34 cifre | simmetrie, intersezioni, segno, crescenza, massimi e minimi |
+| **≈** | trovato numericamente: preciso, ma non garantito | dominio (quando ha dei confini), concavità e flessi, asintoti verticali |
+| **da verificare** (in rosso) | stimato con valori di x molto grandi: confermalo con i limiti | asintoti orizzontali e obliqui |
+
+- Lo studio guarda solo l'intervallo scelto: −∞ e +∞ nei risultati indicano i suoi estremi.
+- I valori "belli" escono in forma esatta, come nel resto dell'app (`x = √3`, `(1; −2)`).
+- Le simmetrie si possono decidere solo con un intervallo simmetrico rispetto a 0.
 
 ## Statistica
 

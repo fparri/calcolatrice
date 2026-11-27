@@ -24,7 +24,15 @@ import io.github.calcolatrice.engine.FunctionTab
 import io.github.calcolatrice.engine.ResultFormatter
 import io.github.calcolatrice.engine.UserFunction
 import io.github.calcolatrice.ui.stackedFractions
+import io.github.calcolatrice.engine.FunctionStudyResult
+import io.github.calcolatrice.engine.LimitResult
+import io.github.calcolatrice.engine.LimitSide
+import io.github.calcolatrice.engine.Reliability
 import io.github.calcolatrice.ui.Chip
+import io.github.calcolatrice.ui.angleChip
+import io.github.calcolatrice.ui.showAngle
+import io.github.calcolatrice.ui.showFraction
+import io.github.calcolatrice.ui.StudyText
 import io.github.calcolatrice.ui.FitTextView
 import io.github.calcolatrice.ui.GraphView
 import io.github.calcolatrice.ui.HardwareKeys
@@ -75,9 +83,18 @@ class FunctionActivity : SheetActivity() {
     private var currentSecond: UserFunction? = null
 
     private lateinit var analysisBox: View
+    private lateinit var limitChip: Chip
     private lateinit var analysisView: TextView
     private var analysis: Result<FunctionAnalysisResult>? = null
     private var analysisRunning = false
+
+    private lateinit var studyBox: View
+    private lateinit var studyView: TextView
+    private var study: Result<FunctionStudyResult>? = null
+    private var studyRunning = false
+
+    /** Funzione e unità degli angoli dell'ultimo studio: i suoi punti si segnano sul grafico solo se non sono cambiate. */
+    private var studyFor: Pair<String, AngleUnit>? = null
 
     /** Cresce a ogni modifica: un calcolo in background ormai superato non viene mostrato. */
     private var generation = 0
@@ -119,7 +136,11 @@ class FunctionActivity : SheetActivity() {
     override fun onAction(action: PadAction) {
         when (action) {
             is PadAction.Input -> if (action.key == CalcKey.Equals) {
-                if (sheet.tab == FunctionTab.ANALYSIS) runAnalysis()
+                when (sheet.tab) {
+                    FunctionTab.ANALYSIS -> runAnalysis()
+                    FunctionTab.STUDY -> runStudy()
+                    else -> Unit
+                }
             } else {
                 sheet.onKey(action.key)
                 invalidateAnalysis()
@@ -169,14 +190,45 @@ class FunctionActivity : SheetActivity() {
     private fun invalidateAnalysis() {
         analysis = null
         analysisRunning = false
+        if (study != null) graphKey = null // i punti dello studio spariscono dal grafico
+        study = null
+        studyRunning = false
+        studyFor = null
         generation++
+    }
+
+    /** Studio di funzione: qualche secondo di calcolo, in background come l'analisi. */
+    private fun runStudy() {
+        val current = ++generation
+        studyRunning = true
+        val snapshot = FunctionSheet(sheet.cells(), FunctionTab.STUDY, sheet.angleUnit)
+        val key = sheet.expression to sheet.angleUnit
+        val variables = settings.variables
+        Thread {
+            val result = try {
+                snapshot.study(variables)
+            } catch (e: Exception) {
+                Result.failure(CalcException(CalcError.UNDEFINED))
+            } catch (e: StackOverflowError) {
+                Result.failure(CalcException(CalcError.OVERFLOW))
+            }
+            runOnUiThread {
+                if (current == generation && !isFinishing) {
+                    study = result
+                    studyFor = key
+                    studyRunning = false
+                    graphKey = null // il grafico segna i punti trovati
+                    render()
+                }
+            }
+        }.start()
     }
 
     /** Derivate, integrali e zeri possono richiedere qualche decimo di secondo: si calcolano in background. */
     private fun runAnalysis() {
         val current = ++generation
         analysisRunning = true
-        val snapshot = FunctionSheet(sheet.cells(), FunctionTab.ANALYSIS, sheet.angleUnit)
+        val snapshot = FunctionSheet(sheet.cells(), FunctionTab.ANALYSIS, sheet.angleUnit, sheet.limitSide)
         val variables = settings.variables
         Thread {
             // Qualunque errore imprevisto diventa un messaggio, mai una chiusura dell'app.
@@ -212,6 +264,7 @@ class FunctionActivity : SheetActivity() {
 
     override fun resultsText(): CharSequence? = when (sheet.tab) {
         FunctionTab.ANALYSIS -> analysisView.text
+        FunctionTab.STUDY -> studyView.text
         FunctionTab.TABLE -> tableRows.filter { (x, _, _) -> x.visibility == View.VISIBLE }
             .joinToString("\n") { (x, y, g) -> listOfNotNull(x.text, y.text, g.text.takeIf { g.visibility == View.VISIBLE }).joinToString("\t") }
         FunctionTab.GRAPH -> null
@@ -222,12 +275,7 @@ class FunctionActivity : SheetActivity() {
     private fun render() {
         val tab = sheet.tab
         tabButtons.zip(keys.functionTabs(tab)).forEach { (button, key) -> if (button.key != key) button.bind(key, palette) }
-        val degrees = sheet.angleUnit == AngleUnit.DEGREES
-        angleChip.update(getString(if (degrees) R.string.angle_degrees_short else R.string.angle_radians_short), checked = false)
-        angleChip.contentDescription = getString(
-            R.string.angle_toggle,
-            getString(if (degrees) R.string.angle_degrees else R.string.angle_radians),
-        )
+        angleChip.showAngle(sheet.angleUnit)
         fractionChip.showFraction(asFraction)
 
         for ((cell, view) in functionViews) {
@@ -258,10 +306,12 @@ class FunctionActivity : SheetActivity() {
         tableBox.visibility = if (tab == FunctionTab.TABLE) View.VISIBLE else View.GONE
         graphBox.visibility = if (tab == FunctionTab.GRAPH) View.VISIBLE else View.GONE
         analysisBox.visibility = if (tab == FunctionTab.ANALYSIS) View.VISIBLE else View.GONE
+        studyBox.visibility = if (tab == FunctionTab.STUDY) View.VISIBLE else View.GONE
         when (tab) {
             FunctionTab.TABLE -> renderTable()
             FunctionTab.GRAPH -> renderGraph()
             FunctionTab.ANALYSIS -> renderAnalysis()
+            FunctionTab.STUDY -> renderStudy()
         }
     }
 
@@ -273,6 +323,8 @@ class FunctionActivity : SheetActivity() {
         FunctionCell.TO -> getString(R.string.analysis_to)
         FunctionCell.EXPRESSION -> getString(R.string.function_label)
         FunctionCell.SECOND -> getString(R.string.second_function_label)
+        FunctionCell.STUDY_FROM -> getString(R.string.analysis_from)
+        FunctionCell.STUDY_TO -> getString(R.string.analysis_to)
     }
 
     private fun number(x: BigDecimal) = solutions.value(x, asFraction = false)
@@ -335,6 +387,15 @@ class FunctionActivity : SheetActivity() {
         currentFunction = sheet.function(settings.variables).getOrNull()
         currentSecond = sheet.secondFunction(settings.variables)?.getOrNull()
         graphView.showFunctions(currentFunction?.fast(), currentSecond?.fast())
+        graphView.marks = study?.getOrNull()?.takeIf { studyFor == (sheet.expression to sheet.angleUnit) }?.let { r ->
+            GraphView.StudyMarks(
+                extrema = (r.maxima + r.minima).map { it.x.toDouble() to it.y.toDouble() },
+                inflections = r.inflections.map { it.x.toDouble() to it.y.toDouble() },
+                zeros = r.zeros.map { it.toDouble() },
+                verticals = r.vertical.map { it.toDouble() },
+                lines = r.lines.map { Triple(it.m.toDouble(), it.q.toDouble(), it.side) },
+            )
+        }
     }
 
     /** Testo del punto toccato sul grafico, calcolato a 34 cifre e arrotondato per la lettura. */
@@ -350,7 +411,44 @@ class FunctionActivity : SheetActivity() {
         return "$xText   f = ${valueAt(f)}   g = ${valueAt(g)}"
     }
 
+    /** "x → 2⁻", "x → +∞"… per il chip e per il testo del limite. */
+    private fun limitArrow(side: LimitSide): String {
+        val point = sheet.cell(FunctionCell.POINT).ifEmpty { "0" }.let { display.format(it) }
+        return when (side) {
+            LimitSide.BOTH -> "x → $point"
+            LimitSide.LEFT -> "x → $point⁻"
+            LimitSide.RIGHT -> "x → $point⁺"
+            LimitSide.PLUS_INFINITY -> "x → +∞"
+            LimitSide.MINUS_INFINITY -> "x → −∞"
+        }
+    }
+
+    /** Righe del limite, con "≈" e, se serve, "da verificare". */
+    private fun limitLines(result: LimitResult?): List<String> {
+        val name = "lim ${limitArrow(sheet.limitSide)} f(x)"
+        fun mark(r: LimitResult) = if (r.reliability == Reliability.RISKY) "  (" + getString(R.string.study_risky) + ")" else ""
+        fun text(r: LimitResult): String = when (r) {
+            is LimitResult.Value -> "≈ " + result(r.value) + mark(r)
+            is LimitResult.Infinite -> (if (r.sign > 0) "+∞" else "−∞") + mark(r)
+            is LimitResult.Oscillating -> getString(R.string.limit_oscillates) + mark(r)
+            is LimitResult.Undefined -> getString(R.string.limit_undefined)
+            is LimitResult.Different -> getString(R.string.limit_different)
+        }
+        return when (result) {
+            null -> listOf("$name: " + getString(R.string.error_syntax))
+            is LimitResult.Different -> listOf(
+                "lim ${limitArrow(LimitSide.LEFT)} f(x) = " + text(result.left),
+                "lim ${limitArrow(LimitSide.RIGHT)} f(x) = " + text(result.right),
+                getString(R.string.limit_different),
+            )
+            is LimitResult.Value, is LimitResult.Infinite -> listOf("$name = " + text(result))
+            else -> listOf("$name: " + text(result))
+        }
+    }
+
     private fun renderAnalysis() {
+        limitChip.update(limitArrow(sheet.limitSide), checked = false)
+        limitChip.contentDescription = getString(R.string.limit_side_description, limitArrow(sheet.limitSide))
         val result = analysis
         storable = emptyList()
         analysisView.setTextColor(palette.onBackground)
@@ -368,6 +466,46 @@ class FunctionActivity : SheetActivity() {
                 analysisView.setTextColor(palette.error)
             }
             else -> showAnalysis(result.getOrThrow())
+        }
+    }
+
+    /** "da verificare" nel colore degli errori, come nello studio di funzione. */
+    private fun highlightRisky(text: CharSequence): CharSequence {
+        val risky = getString(R.string.study_risky)
+        var index = text.indexOf(risky)
+        if (index < 0) return text
+        val builder = android.text.SpannableStringBuilder(text)
+        while (index >= 0) {
+            builder.setSpan(
+                android.text.style.ForegroundColorSpan(palette.error), index, index + risky.length,
+                android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
+            )
+            index = text.indexOf(risky, index + risky.length)
+        }
+        return builder
+    }
+
+    private fun renderStudy() {
+        val result = study
+        studyView.setTextColor(palette.onBackground)
+        when {
+            studyRunning -> {
+                studyView.text = getString(R.string.study_running)
+                studyView.setTextColor(palette.onBackgroundVariant)
+            }
+            result == null -> {
+                studyView.text = getString(R.string.study_hint)
+                studyView.setTextColor(palette.onBackgroundVariant)
+            }
+            result.isFailure -> {
+                studyView.text = failureText(result.exceptionOrNull())
+                studyView.setTextColor(palette.error)
+            }
+            else -> {
+                val text = StudyText(this, palette) { result(it) }.build(result.getOrThrow())
+                studyView.text = if (asFraction) stackedFractions(text) else text
+                studyView.contentDescription = spoken(text)
+            }
         }
     }
 
@@ -424,12 +562,14 @@ class FunctionActivity : SheetActivity() {
                 lines += getString(R.string.analysis_intersections) + ": " + getString(errorMessage(crossings.error))
             else -> Unit
         }
+        lines += ""
+        lines += limitLines(r.limit)
         if ((r.integral as? AnalysisItem.Value)?.approximate == true) {
             lines += ""
             lines += getString(R.string.analysis_approximate)
         }
         val text = lines.joinToString("\n")
-        analysisView.text = stacked(text)
+        analysisView.text = highlightRisky(stacked(text))
         analysisView.contentDescription = spoken(text)
         storable = values
     }
@@ -438,7 +578,7 @@ class FunctionActivity : SheetActivity() {
 
     private fun buildContent(): View {
         val editor = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        angleChip = Chip(this, palette, checkable = false).apply { setOnClickListener { onAction(PadAction.ToggleAngle) } }
+        angleChip = angleChip(this, palette) { onAction(PadAction.ToggleAngle) }
         fractionChip = fractionChip()
         editor.addView(
             topBar(titleView(getString(R.string.functions)), fractionChip, angleChip),
@@ -461,9 +601,11 @@ class FunctionActivity : SheetActivity() {
         tableBox = buildTable()
         graphBox = buildGraph()
         analysisBox = buildAnalysis()
+        studyBox = buildStudy()
         content.addView(tableBox, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         content.addView(graphBox, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         content.addView(analysisBox, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+        content.addView(studyBox, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         editor.addView(content, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f).apply { topMargin = dp(8) })
 
         val keypad = keypad(listOf(keys.functionTools(), keys.functionTools2()), keys.functionMain(decimalSeparator), 24f)
@@ -626,6 +768,21 @@ class FunctionActivity : SheetActivity() {
             ),
             LinearLayout.LayoutParams(MATCH_PARENT, dp(40)),
         )
+        // Verso del limite: un tocco passa al successivo (x → x₀, x₀⁻, x₀⁺, +∞, −∞).
+        val limitRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        limitRow.addView(label(getString(R.string.limit_label)), LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
+        limitChip = Chip(this, palette, checkable = false).apply {
+            setOnClickListener {
+                sheet.cycleLimitSide()
+                invalidateAnalysis()
+                render()
+            }
+        }
+        limitRow.addView(limitChip, LinearLayout.LayoutParams(WRAP_CONTENT, dp(32)).apply { marginStart = dp(8) })
+        box.addView(limitRow, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) })
         analysisView = TextView(this).apply {
             textSize = if (landscape) 17f else 19f
             gravity = Gravity.END
@@ -643,6 +800,36 @@ class FunctionActivity : SheetActivity() {
         return box
     }
 
+    private fun buildStudy(): View {
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        box.addView(
+            parameterRow(
+                listOf(
+                    FunctionCell.STUDY_FROM to getString(R.string.analysis_from),
+                    FunctionCell.STUDY_TO to getString(R.string.analysis_to),
+                ),
+            ),
+            LinearLayout.LayoutParams(MATCH_PARENT, dp(40)),
+        )
+        studyView = TextView(this).apply {
+            textSize = if (landscape) 15f else 16f
+            setLineSpacing(dp(2).toFloat(), 1f)
+            setPadding(dp(16), dp(12), dp(16), dp(12))
+            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+            setOnLongClickListener {
+                copyResults()
+                true
+            }
+        }
+        val scroll = ScrollView(this).apply {
+            addView(studyView)
+            background = roundedDrawable(palette.panel, dp(28).toFloat())
+            clipToOutline = true
+        }
+        box.addView(scroll, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f).apply { topMargin = dp(6) })
+        return box
+    }
+
     // ---------------------------------------------------------------- salvataggio
 
     private fun restoreSheet(): FunctionSheet = runCatching {
@@ -652,6 +839,7 @@ class FunctionActivity : SheetActivity() {
             cells = FunctionCell.entries.filter { cells.has(it.name) }.associateWith { cells.getString(it.name) },
             tab = FunctionTab.entries.firstOrNull { it.name == saved.optString("tab") } ?: FunctionTab.TABLE,
             angleUnit = AngleUnit.entries.firstOrNull { it.name == saved.optString("angle") } ?: AngleUnit.RADIANS,
+            limitSide = LimitSide.entries.firstOrNull { it.name == saved.optString("limit") } ?: LimitSide.BOTH,
         )
     }.getOrElse { FunctionSheet() }
 
@@ -662,6 +850,7 @@ class FunctionActivity : SheetActivity() {
             .put("cells", cells)
             .put("tab", sheet.tab.name)
             .put("angle", sheet.angleUnit.name)
+            .put("limit", sheet.limitSide.name)
         prefs.edit().putString(PREF_SHEET, saved.toString()).apply()
     }
 

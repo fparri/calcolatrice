@@ -13,6 +13,7 @@ object SpokenMath {
         val lessEqual: String, val greaterEqual: String, val less: String, val greater: String,
         val notEqual: String, val or: String, val union: String, val infinity: String,
         val squared: String, val cubed: String, val toThe: String, val over: String,
+        val tendsTo: String, val fromLeft: String, val fromRight: String,
         val inverse: Map<String, String>,
         /** Denominatori con un nome (2 → mezzi): singolare (numeratore 1) e plurale. */
         val denominators: Map<String, Pair<String, String>>,
@@ -25,6 +26,7 @@ object SpokenMath {
         lessEqual = "minore o uguale a", greaterEqual = "maggiore o uguale a", less = "minore di",
         greater = "maggiore di", notEqual = "diverso da", or = "oppure", union = "unione", infinity = "infinito",
         squared = "al quadrato", cubed = "al cubo", toThe = "alla", over = "fratto",
+        tendsTo = "tende a", fromLeft = "da sinistra", fromRight = "da destra",
         inverse = mapOf("sin⁻¹" to "arcoseno", "cos⁻¹" to "arcocoseno", "tan⁻¹" to "arcotangente"),
         denominators = mapOf(
             "2" to ("mezzo" to "mezzi"), "3" to ("terzo" to "terzi"), "4" to ("quarto" to "quarti"),
@@ -40,6 +42,7 @@ object SpokenMath {
         lessEqual = "less than or equal to", greaterEqual = "greater than or equal to", less = "less than",
         greater = "greater than", notEqual = "not equal to", or = "or", union = "union", infinity = "infinity",
         squared = "squared", cubed = "cubed", toThe = "to the power of", over = "over",
+        tendsTo = "tends to", fromLeft = "from the left", fromRight = "from the right",
         inverse = mapOf("sin⁻¹" to "arc sine", "cos⁻¹" to "arc cosine", "tan⁻¹" to "arc tangent"),
         denominators = mapOf(
             "2" to ("half" to "halves"), "3" to ("third" to "thirds"), "4" to ("quarter" to "quarters"),
@@ -54,7 +57,7 @@ object SpokenMath {
 
     fun describe(text: CharSequence, language: String): String {
         val w = if (language == "it") ITALIAN else ENGLISH
-        var s = text.toString()
+        var s = FractionText.linearize(text.toString())
         w.inverse.forEach { (symbol, name) -> s = s.replace(symbol, name) }
         s = fractions(s, w)
         val out = StringBuilder()
@@ -70,6 +73,8 @@ object SpokenMath {
                     word(
                         out,
                         when (power) {
+                            // x → 2⁻: limite da sinistra.
+                            "-" -> w.fromLeft
                             "2" -> w.squared
                             "3" -> w.cubed
                             else -> "${w.toThe} " + power.replace("-", "${w.minus} ")
@@ -94,6 +99,7 @@ object SpokenMath {
         '+' -> w.plus
         '×', '·' -> w.times
         '÷' -> w.dividedBy
+        '/' -> w.over
         '√' -> w.root
         'π' -> w.pi
         '=' -> w.equals
@@ -106,6 +112,8 @@ object SpokenMath {
         '∨' -> w.or
         '∪' -> w.union
         '∞' -> w.infinity
+        '→' -> w.tendsTo
+        '⁺' -> w.fromRight
         else -> null
     }
 

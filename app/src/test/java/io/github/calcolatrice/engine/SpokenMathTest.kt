@@ -35,4 +35,10 @@ class SpokenMathTest {
         assertEquals("arcoseno(0,5)", it("sin⁻¹(0,5)"))
         assertEquals("meno un mezzo più radice di 3 fratto 2 i", it("−1/2 + (√3/2)i"))
     }
+
+    @Test
+    fun limits() {
+        assertEquals("lim x tende a 2 da sinistra f(x) uguale meno infinito", it("lim x → 2⁻ f(x) = −∞"))
+        assertEquals("lim x tends to 0 from the right f(x) equals plus infinity", en("lim x → 0⁺ f(x) = +∞"))
+    }
 }

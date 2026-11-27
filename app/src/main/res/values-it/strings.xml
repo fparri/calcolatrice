@@ -130,9 +130,9 @@
 
     <!-- Disequazioni -->
     <string name="mode_inequality">Diseq.</string>
-    <string name="mode_inequality_description">Disequazione ax² + bx + c maggiore o minore di 0, oppure sistema di due</string>
-    <string name="inequality_hint">Tocca il segno per cambiarlo. La seconda riga è facoltativa: compilala per risolvere un sistema.</string>
-    <string name="inequality_system">Sistema di due disequazioni</string>
+    <string name="mode_inequality_description">Disequazione ax² + bx + c maggiore o minore di 0, oppure sistema di due o tre</string>
+    <string name="inequality_hint">Tocca il segno per cambiarlo. La seconda e la terza riga sono facoltative: compilale per risolvere un sistema.</string>
+    <string name="inequality_system">Sistema di %1$d disequazioni</string>
     <string name="all_real_solutions">Ogni x reale è soluzione</string>
     <string name="relation_description">Disequazione %1$d: %2$s zero. Tocca per cambiare</string>
     <string name="relation_greater">maggiore di</string>
@@ -155,7 +155,7 @@
     <string name="table_step">passo</string>
     <string name="parameter_description">%1$s: %2$s</string>
     <string name="undefined_short">non def.</string>
-    <string name="analysis_hint">Premi = per calcolare f(x₀), f′(x₀), l\'integrale da a a b e gli zeri tra a e b</string>
+    <string name="analysis_hint">Premi = per calcolare f(x₀), f′(x₀), l\'integrale da a a b, gli zeri tra a e b e il limite</string>
     <string name="analysis_running">Calcolo in corso…</string>
     <string name="analysis_zeros">Zeri tra a e b</string>
     <string name="analysis_no_zeros">nessuno</string>
@@ -190,4 +190,67 @@
     <string name="second_function_cell_description">Seconda funzione g di x: %1$s</string>
     <string name="analysis_intersections">Intersezioni di f e g tra a e b</string>
     <string name="analysis_no_intersections">nessuna</string>
+
+    <!-- Frazioni su due livelli -->
+    <string name="key_fraction">Frazione: numeratore sopra, denominatore sotto</string>
+    <string name="key_divide_fraction">Diviso: scrive una frazione</string>
+    <string name="key_cursor_left">Sposta il cursore a sinistra</string>
+    <string name="key_cursor_right">Sposta il cursore a destra</string>
+    <string name="fraction_input">Scrittura delle frazioni</string>
+    <string name="fraction_input_key">Con il tasto ▫/▫ (÷ resta la divisione)</string>
+    <string name="fraction_input_division">Con il tasto ÷, come sulle Casio</string>
+
+    <!-- Disequazioni fratte -->
+    <string name="mode_rational">Fratta</string>
+    <string name="mode_rational_description">Disequazione fratta N(x) / D(x) maggiore o minore di 0</string>
+    <string name="rational_hint">Scrivi i coefficienti del numeratore N(x) e del denominatore D(x), al massimo di secondo grado. Tocca il segno per cambiarlo.</string>
+    <string name="rational_domain">Condizione di esistenza: %1$s</string>
+    <string name="rational_numerator">Numeratore</string>
+    <string name="rational_denominator">Denominatore</string>
+    <string name="rational_cell_description">%1$s, coefficiente di %2$s: %3$s</string>
+
+    <!-- Studio di funzione -->
+    <string name="tab_study">Studio</string>
+    <string name="tab_study_description">Studio completo della funzione: dominio, segno, crescenza, massimi e minimi, concavità, asintoti</string>
+    <string name="study_hint">Scegli l\'intervallo e premi = per studiare f(x). I punti trovati sono segnati anche nel Grafico.</string>
+    <string name="study_running">Studio della funzione in corso…</string>
+    <string name="study_interval">Studio tra %1$s e %2$s (−∞ e +∞ indicano gli estremi dell\'intervallo)</string>
+    <string name="study_domain">Dominio</string>
+    <string name="study_all_interval">tutto l\'intervallo</string>
+    <string name="study_parity">Simmetrie</string>
+    <string name="study_even">pari: simmetrica rispetto all\'asse y</string>
+    <string name="study_odd">dispari: simmetrica rispetto all\'origine</string>
+    <string name="study_no_parity">né pari né dispari</string>
+    <string name="study_parity_unknown">non si può dire: scegli un intervallo simmetrico rispetto a 0</string>
+    <string name="study_intersections">Intersezioni con gli assi</string>
+    <string name="study_y_axis">asse y: %1$s</string>
+    <string name="study_x_axis">asse x: %1$s</string>
+    <string name="study_none">nessuno</string>
+    <string name="study_always">sempre</string>
+    <string name="study_never">mai</string>
+    <string name="study_sign">Segno</string>
+    <string name="study_positive">positiva: %1$s</string>
+    <string name="study_negative">negativa: %1$s</string>
+    <string name="study_monotonic">Crescenza e decrescenza</string>
+    <string name="study_increasing">crescente: %1$s</string>
+    <string name="study_decreasing">decrescente: %1$s</string>
+    <string name="study_maxima">massimi: %1$s</string>
+    <string name="study_minima">minimi: %1$s</string>
+    <string name="study_concavity">Concavità</string>
+    <string name="study_convex">convessa (concavità verso l\'alto): %1$s</string>
+    <string name="study_concave">concava (concavità verso il basso): %1$s</string>
+    <string name="study_inflections">flessi: %1$s</string>
+    <string name="study_vertical">Asintoti verticali</string>
+    <string name="study_lines">Asintoti orizzontali e obliqui</string>
+    <string name="study_horizontal">orizzontale</string>
+    <string name="study_oblique">obliquo</string>
+    <string name="study_risky">da verificare</string>
+    <string name="study_legend">≈ trovato numericamente: preciso, ma non garantito. «Da verificare»: stimato con valori di x molto grandi; confermalo con i limiti.</string>
+
+    <!-- Limiti -->
+    <string name="limit_label">Limite</string>
+    <string name="limit_side_description">Limite per %1$s. Tocca per cambiare: da entrambi i lati, da sinistra, da destra, più o meno infinito</string>
+    <string name="limit_oscillates">non esiste, la funzione oscilla</string>
+    <string name="limit_undefined">f non è definita vicino a x₀ da questo lato</string>
+    <string name="limit_different">limite sinistro e destro diversi: il limite non esiste</string>
 </resources>

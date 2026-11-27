@@ -5,7 +5,6 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
-import android.content.SharedPreferences
 import android.graphics.Typeface
 import android.os.Bundle
 import android.text.SpannableStringBuilder
@@ -23,18 +22,26 @@ import android.widget.LinearLayout
 import android.widget.PopupMenu
 import android.widget.ScrollView
 import android.widget.TextView
-import io.github.calcolatrice.engine.AngleUnit
 import io.github.calcolatrice.engine.CalcKey
 import io.github.calcolatrice.engine.CalculatorSession
-import io.github.calcolatrice.engine.CalculatorState
 import io.github.calcolatrice.engine.DisplayFormatter
 import io.github.calcolatrice.engine.HistoryEntry
 import io.github.calcolatrice.engine.NumberFormat
 import io.github.calcolatrice.engine.ResultFormatter
 import io.github.calcolatrice.engine.SolutionFormatter
 import io.github.calcolatrice.engine.VARIABLES
+import io.github.calcolatrice.engine.ExpressionText
+import io.github.calcolatrice.engine.FractionText
 import io.github.calcolatrice.engine.SpokenMath
+import io.github.calcolatrice.ui.MathEntry
+import io.github.calcolatrice.ui.MathText
+import io.github.calcolatrice.ui.mathSpans
+import io.github.calcolatrice.ui.CalculatorStore
 import io.github.calcolatrice.ui.Chip
+import io.github.calcolatrice.ui.angleChip
+import io.github.calcolatrice.ui.fractionChip
+import io.github.calcolatrice.ui.showAngle
+import io.github.calcolatrice.ui.showFraction
 import io.github.calcolatrice.ui.ColorTheme
 import io.github.calcolatrice.ui.FitTextView
 import io.github.calcolatrice.ui.LauncherIcon
@@ -58,8 +65,6 @@ import io.github.calcolatrice.ui.rippleDrawable
 import io.github.calcolatrice.ui.roundedDrawable
 import io.github.calcolatrice.ui.setupEdgeToEdge
 import io.github.calcolatrice.ui.showNumberFormatDialog
-import org.json.JSONArray
-import org.json.JSONObject
 import java.math.BigDecimal
 import java.text.DecimalFormatSymbols
 
@@ -71,7 +76,7 @@ import java.text.DecimalFormatSymbols
 class MainActivity : Activity() {
 
     private lateinit var settings: Settings
-    private lateinit var prefs: SharedPreferences
+    private lateinit var store: CalculatorStore
     private lateinit var session: CalculatorSession
     private lateinit var palette: Palette
     private lateinit var keys: KeyFactory
@@ -87,6 +92,12 @@ class MainActivity : Activity() {
     private lateinit var previousView: TextView
     private lateinit var mainView: FitTextView
     private lateinit var secondaryView: FitTextView
+
+    /** Frecce ◀ ▶ accanto all'anteprima: compaiono quando l'espressione contiene una frazione. */
+    private lateinit var cursorKeys: View
+
+    /** Tasto ▫/▫ nel tastierino (false: ÷ scrive le frazioni, come Casio). */
+    private var fractionKey = true
     private lateinit var angleChip: Chip
     private lateinit var fractionChip: Chip
     private lateinit var menuButton: View
@@ -117,7 +128,6 @@ class MainActivity : Activity() {
         setupEdgeToEdge()
 
         settings = Settings(this)
-        prefs = settings.prefs
         palette = Palette(this)
         keys = KeyFactory(this)
         pad = KeyPad(this, palette, ::onAction)
@@ -126,9 +136,12 @@ class MainActivity : Activity() {
         formatter = DisplayFormatter(symbols.decimalSeparator, symbols.groupingSeparator, localFunctionNames())
         plainFormatter = DisplayFormatter(symbols.decimalSeparator, null, localFunctionNames(), scientificPowers = false)
         numberFormat = settings.numberFormat
-        asFraction = prefs.getBoolean(PREF_FRACTION, false)
+        store = CalculatorStore(settings)
+        asFraction = store.asFraction
 
-        session = restoreSession()
+        session = store.restore()
+        fractionKey = !settings.divisionMakesFraction
+        session.divisionMakesFraction = !fractionKey
         scientificExpanded = savedInstanceState?.getBoolean(KEY_SCIENTIFIC_EXPANDED) ?: false
         val config = resources.configuration
         landscape = config.screenWidthDp > config.screenHeightDp
@@ -180,22 +193,29 @@ class MainActivity : Activity() {
             PadAction.ToggleInverse -> session.inverse = !session.inverse
             PadAction.ToggleAngle -> {
                 session.toggleAngleUnit()
-                prefs.edit().putString(PREF_ANGLE, session.angleUnit.name).apply()
+                store.saveAngle(session.angleUnit)
             }
             PadAction.ToggleScientific -> scientificExpanded = !scientificExpanded
             PadAction.ShowHistory -> showHistory()
             PadAction.ShowMenu -> showMenu()
             PadAction.ShowVariables -> showVariables()
-            PadAction.ShowMath -> showMathMenu(mathEntries(formatter), palette) { onAction(PadAction.Input(it)) }
+            PadAction.ShowMath -> showMathMenu(mathMenu(), palette) { onAction(PadAction.Input(it)) }
+            is PadAction.MoveCursor -> session.moveCursor(action.delta)
             PadAction.ToggleFraction -> {
                 asFraction = !asFraction
-                prefs.edit().putBoolean(PREF_FRACTION, asFraction).apply()
+                store.asFraction = asFraction
             }
             // Azioni delle altre schermate.
             PadAction.Back, is PadAction.Sheet, is PadAction.SetEquationMode, is PadAction.SetStatMode,
             is PadAction.SetFunctionTab -> Unit
         }
         render()
+    }
+
+    /** Menu MATH: con il tasto ▫/▫ nel tastierino, x! si trova qui (il suo posto è andato a %). */
+    private fun mathMenu(): List<MathEntry> {
+        val factorial = MathEntry("x!", getString(R.string.key_factorial).replaceFirstChar { it.uppercase() }, CalcKey.Factorial)
+        return if (fractionKey) listOf(factorial) + mathEntries(formatter) else mathEntries(formatter)
     }
 
     /** Tastiere fisiche: tablet, Chromebook, tastiere Bluetooth. */
@@ -311,8 +331,10 @@ class MainActivity : Activity() {
         mainView.contentDescription = spoken(main.toString().replace(CURSOR, ""))
 
         val last = session.lastExpression
-        val previous = last?.let { formatter.format(it) + " =" }
-        previousView.text = previous.orEmpty()
+        // Anche la riga del calcolo precedente mostra le frazioni su due livelli.
+        val previous = last?.let { formatter.layout(it).text + " =" }
+        previousView.text = previous?.let(::mathSpans) ?: ""
+        previousView.contentDescription = previous?.let(::spoken)
         previousView.visibility = if (previous == null) View.GONE else View.VISIBLE
 
         val error = calc.error?.let { getString(errorMessage(it)) }
@@ -322,15 +344,18 @@ class MainActivity : Activity() {
         secondaryView.text = error ?: preview?.let { if (asFraction) stackedFractions(it) else it } ?: ""
         secondaryView.setTextColor(if (error != null) palette.error else palette.onBackgroundVariant)
         secondaryView.contentDescription = spoken(secondaryView.text)
+        cursorKeys.visibility =
+            if (!calc.justEvaluated && ExpressionText.hasFraction(calc.expression)) View.VISIBLE else View.GONE
 
-        val degrees = session.angleUnit == AngleUnit.DEGREES
-        val angleName = getString(if (degrees) R.string.angle_degrees else R.string.angle_radians)
-        angleChip.update(getString(if (degrees) R.string.angle_degrees_short else R.string.angle_radians_short), checked = false)
-        angleChip.contentDescription = getString(R.string.angle_toggle, angleName)
-        fractionChip.update(getString(R.string.fraction_short), asFraction)
+        angleChip.showAngle(session.angleUnit)
+        fractionChip.showFraction(asFraction)
         renderHistoryPane()
 
-        val specs = if (landscape) keys.scientificLandscape(session.inverse) else keys.scientificPortrait(session.inverse)
+        val specs = if (landscape) {
+            keys.scientificLandscape(session.inverse, fractionKey)
+        } else {
+            keys.scientificPortrait(session.inverse, fractionKey)
+        }
         scientificButtons.zip(specs).forEach { (buttons, row) ->
             buttons.zip(row).forEach { (button, key) -> if (button.key != key) button.bind(key, palette) }
         }
@@ -355,20 +380,23 @@ class MainActivity : Activity() {
     private fun displayText(text: String, cursorAt: Int?): CharSequence {
         val focus = cursorAt ?: text.length
         val window = mainView.fittingWindow(text, focus, windowStart, extra = if (cursorAt != null) CURSOR else "")
-        val start = window?.start ?: 0
-        val end = window?.end ?: text.length
+        // Il taglio non spezza mai una frazione su due livelli.
+        val start = FractionText.outside(text, window?.start ?: 0, forward = false)
+        val end = FractionText.outside(text, window?.end ?: text.length, forward = true)
         windowStart = start
         val prefix = if (start > 0) FitTextView.ELLIPSIS else ""
         val suffix = if (end < text.length) FitTextView.ELLIPSIS else ""
         windowShift = start - prefix.length
         val visible = prefix + text.substring(start, end) + suffix
-        if (cursorAt == null) return visible
+        if (cursorAt == null) return mathSpans(visible)
         val at = (cursorAt - start + prefix.length).coerceIn(prefix.length, prefix.length + end - start)
         cursorGlyphAt = at
-        return SpannableStringBuilder(visible).apply {
-            insert(at, CURSOR)
-            setSpan(ForegroundColorSpan(palette.accent), at, at + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-        }
+        return mathSpans(
+            SpannableStringBuilder(visible).apply {
+                insert(at, CURSOR)
+                setSpan(ForegroundColorSpan(palette.accent), at, at + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            },
+        )
     }
 
     private fun buildContent(): View {
@@ -398,20 +426,20 @@ class MainActivity : Activity() {
                 setPadding(dp(6), dp(6), dp(6), dp(6))
             }
             val (scientificGrid, buttons) = pad.grid(
-                keys.scientificLandscape(session.inverse), dp(4), 18f,
+                keys.scientificLandscape(session.inverse, fractionKey), dp(4), 18f,
             )
             scientificButtons = buttons
             panel.addView(scientificGrid, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
             bottom.addView(panel, LinearLayout.LayoutParams(0, MATCH_PARENT, 4f))
             bottom.addView(View(this), LinearLayout.LayoutParams(dp(12), MATCH_PARENT))
-            val (mainGrid, _) = pad.grid(keys.main(decimalSeparator), dp(6), 22f)
+            val (mainGrid, _) = pad.grid(keys.main(decimalSeparator, fractionKey, !fractionKey), dp(6), 22f)
             mainGridView = mainGrid
             bottom.addView(mainGrid, LinearLayout.LayoutParams(0, MATCH_PARENT, 4f))
             column.addView(bottom, LinearLayout.LayoutParams(MATCH_PARENT, 0, 2.2f))
         } else {
             column.addView(buildScientificPanel(), LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
             column.addView(View(this), LinearLayout.LayoutParams(MATCH_PARENT, dp(12)))
-            val (mainGrid, _) = pad.grid(keys.main(decimalSeparator), dp(KEY_SPACING), 30f)
+            val (mainGrid, _) = pad.grid(keys.main(decimalSeparator, fractionKey, !fractionKey), dp(KEY_SPACING), 30f)
             mainGridView = mainGrid
             column.addView(mainGrid, LinearLayout.LayoutParams(MATCH_PARENT, 0, 2f))
         }
@@ -427,13 +455,9 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        angleChip = Chip(this, palette, checkable = false).apply { setOnClickListener { onAction(PadAction.ToggleAngle) } }
+        angleChip = angleChip(this, palette) { onAction(PadAction.ToggleAngle) }
         bar.addView(angleChip, LinearLayout.LayoutParams(WRAP_CONTENT, dp(32)))
-        fractionChip = Chip(this, palette, checkable = true).apply {
-            setOnClickListener { onAction(PadAction.ToggleFraction) }
-            // TalkBack legge cosa fa, non solo l'etichetta.
-            contentDescription = getString(R.string.show_fractions)
-        }
+        fractionChip = fractionChip(this, palette) { onAction(PadAction.ToggleFraction) }
         bar.addView(fractionChip, LinearLayout.LayoutParams(WRAP_CONTENT, dp(32)).apply { marginStart = dp(8) })
         bar.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
         // Sugli schermi larghi la cronologia è già a fianco.
@@ -499,7 +523,20 @@ class MainActivity : Activity() {
         }
         display.addView(previousView, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         display.addView(mainView, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f))
-        display.addView(secondaryView, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+        // Riga dell'anteprima: a sinistra le frecce per muoversi dentro le frazioni.
+        val previewRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        cursorKeys = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            addView(pad.button(keys.cursorKey(left = true), 16f), LinearLayout.LayoutParams(dp(48), dp(40)))
+            addView(pad.button(keys.cursorKey(left = false), 16f), LinearLayout.LayoutParams(dp(48), dp(40)).apply { marginStart = dp(8) })
+            visibility = View.GONE
+        }
+        previewRow.addView(cursorKeys, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
+        previewRow.addView(secondaryView, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { marginStart = dp(8) })
+        display.addView(previewRow, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         return display
     }
 
@@ -508,7 +545,7 @@ class MainActivity : Activity() {
      * e in fondo una maniglia con la freccia per aprirlo e chiuderlo.
      */
     private fun buildScientificPanel(): View {
-        val rows = keys.scientificPortrait(session.inverse)
+        val rows = keys.scientificPortrait(session.inverse, fractionKey)
         val panel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             background = roundedDrawable(palette.panel, dp(28).toFloat())
@@ -541,7 +578,8 @@ class MainActivity : Activity() {
             menu.add(0, MENU_STATISTICS, 2, R.string.statistics)
             menu.add(0, MENU_VARIABLES, 3, R.string.variables)
             menu.add(0, MENU_FORMAT, 4, R.string.number_format)
-            menu.add(0, MENU_COLORS, 5, R.string.colors)
+            menu.add(0, MENU_FRACTION_INPUT, 5, R.string.fraction_input)
+            menu.add(0, MENU_COLORS, 6, R.string.colors)
             setOnMenuItemClickListener { item ->
                 when (item.itemId) {
                     MENU_EQUATIONS -> startActivity(Intent(this@MainActivity, EquationActivity::class.java))
@@ -550,6 +588,7 @@ class MainActivity : Activity() {
                     MENU_VARIABLES -> showVariables()
                     MENU_FORMAT -> chooseFormat()
                     MENU_COLORS -> chooseColors()
+                    MENU_FRACTION_INPUT -> chooseFractionInput()
                 }
                 true
             }
@@ -588,6 +627,24 @@ class MainActivity : Activity() {
                 } else {
                     applyColors(chosen)
                 }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    /** Frazioni su due livelli: con il tasto ▫/▫ (÷ resta la divisione) oppure con ÷, come sulle Casio. */
+    private fun chooseFractionInput() {
+        val labels = arrayOf(getString(R.string.fraction_input_key), getString(R.string.fraction_input_division))
+        AlertDialog.Builder(this)
+            .setTitle(R.string.fraction_input)
+            .setSingleChoiceItems(labels, if (fractionKey) 0 else 1) { dialog, which ->
+                dialog.dismiss()
+                val division = which == 1
+                if (division == !fractionKey) return@setSingleChoiceItems
+                saveState()
+                settings.divisionMakesFraction = division
+                // I tasti cambiano: si ricostruisce la schermata.
+                recreate()
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
@@ -831,62 +888,11 @@ class MainActivity : Activity() {
 
     // ---------------------------------------------------------------- salvataggio
 
-    /** Il calcolo in corso resta anche chiudendo l'app, come sulle calcolatrici. */
-    private fun restoreSession(): CalculatorSession {
-        val saved = runCatching { JSONObject(prefs.getString(PREF_STATE, null) ?: "{}") }.getOrDefault(JSONObject())
-        val expression = saved.optString("expression", "")
-        val calc = CalculatorState(
-            expression = expression,
-            ans = saved.optString("ans", "").toBigDecimalOrNull(),
-            justEvaluated = saved.optBoolean("justEvaluated", false),
-            cursor = saved.optInt("cursor", -1).takeIf { it in 0 until expression.length },
-        )
-        val angleUnit = prefs.getString(PREF_ANGLE, null)
-            ?.let { name -> AngleUnit.entries.firstOrNull { it.name == name } }
-            ?: AngleUnit.DEGREES
-        return CalculatorSession(
-            calc = calc,
-            angleUnit = angleUnit,
-            inverse = saved.optBoolean("inverse", false),
-            history = decodeHistory(prefs.getString(PREF_HISTORY, null)),
-            lastExpression = saved.optString("lastExpression", "").ifEmpty { null },
-            variables = settings.variables,
-        )
-    }
+    private fun saveState() = store.saveState(session)
 
-    private fun saveState() {
-        val calc = session.calc
-        val state = JSONObject()
-            .put("expression", calc.expression)
-            .put("ans", calc.ans?.toString().orEmpty())
-            .put("justEvaluated", calc.justEvaluated)
-            .put("cursor", calc.cursor ?: -1)
-            .put("inverse", session.inverse)
-            .put("lastExpression", session.lastExpression.orEmpty())
-        prefs.edit().putString(PREF_STATE, state.toString()).apply()
-        saveVariables()
-    }
+    private fun saveVariables() = store.saveVariables(session)
 
-    private fun saveVariables() {
-        settings.variables = session.variables
-    }
-
-    private fun saveHistory() {
-        val array = JSONArray()
-        session.history.forEach { array.put(JSONObject().put("e", it.expression).put("r", it.result)) }
-        prefs.edit().putString(PREF_HISTORY, array.toString()).apply()
-    }
-
-    private fun decodeHistory(json: String?): List<HistoryEntry> {
-        if (json == null) return emptyList()
-        return runCatching {
-            val array = JSONArray(json)
-            List(array.length()) { i ->
-                val item = array.getJSONObject(i)
-                HistoryEntry(item.getString("e"), item.getString("r"))
-            }
-        }.getOrDefault(emptyList())
-    }
+    private fun saveHistory() = store.saveHistory(session)
 
     companion object {
         /** Azioni delle scorciatoie dell'icona (res/xml/shortcuts.xml). */
@@ -894,14 +900,10 @@ class MainActivity : Activity() {
         const val ACTION_STATISTICS = "io.github.calcolatrice.action.STATISTICS"
         const val ACTION_FUNCTIONS = "io.github.calcolatrice.action.FUNCTIONS"
 
-        private const val CURSOR = "|"
+        private const val CURSOR = MathText.CURSOR.toString()
 
         /** Spazio tra i tasti del tastierino in verticale. */
         private const val KEY_SPACING = 10
-        private const val PREF_ANGLE = "angle_unit"
-        private const val PREF_HISTORY = "history"
-        private const val PREF_STATE = "state"
-        private const val PREF_FRACTION = "fraction_main"
         private const val KEY_SCIENTIFIC_EXPANDED = "scientific_expanded"
         private const val MENU_EQUATIONS = 1
         private const val MENU_STATISTICS = 2
@@ -909,6 +911,7 @@ class MainActivity : Activity() {
         private const val MENU_FORMAT = 4
         private const val MENU_FUNCTIONS = 5
         private const val MENU_COLORS = 6
+        private const val MENU_FRACTION_INPUT = 7
 
         /** Da questa larghezza (classe "expanded" di Material 3) la cronologia sta a fianco. */
         private const val WIDE_SCREEN_DP = 840

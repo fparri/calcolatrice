@@ -10,6 +10,7 @@ import android.view.Gravity
 import android.widget.CompoundButton
 import android.widget.TextView
 import io.github.calcolatrice.R
+import io.github.calcolatrice.engine.AngleUnit
 
 /**
  * Chip di Material 3: etichetta in un rettangolo con angoli di 8 dp, alto 32 dp. Spento ha un bordo
@@ -67,3 +68,25 @@ class Chip(context: Context, private val palette: Palette, private val checkable
         }
     }
 }
+
+/** Chip DEG/RAD: un tocco cambia unità degli angoli. */
+fun angleChip(context: Context, palette: Palette, onClick: () -> Unit) =
+    Chip(context, palette, checkable = false).apply { setOnClickListener { onClick() } }
+
+fun Chip.showAngle(unit: AngleUnit) {
+    val degrees = unit == AngleUnit.DEGREES
+    update(context.getString(if (degrees) R.string.angle_degrees_short else R.string.angle_radians_short), checked = false)
+    contentDescription = context.getString(
+        R.string.angle_toggle,
+        context.getString(if (degrees) R.string.angle_degrees else R.string.angle_radians),
+    )
+}
+
+/** Chip "Frazioni": risultati in forma esatta sì/no (TalkBack legge cosa fa, non solo l'etichetta). */
+fun fractionChip(context: Context, palette: Palette, onClick: () -> Unit) =
+    Chip(context, palette, checkable = true).apply {
+        setOnClickListener { onClick() }
+        contentDescription = context.getString(R.string.show_fractions)
+    }
+
+fun Chip.showFraction(asFraction: Boolean) = update(context.getString(R.string.fraction_short), asFraction)

@@ -2,8 +2,8 @@ package io.github.calcolatrice.engine
 
 import java.math.BigDecimal
 
-/** Le tre viste della schermata Funzioni. */
-enum class FunctionTab { TABLE, GRAPH, ANALYSIS }
+/** Le viste della schermata Funzioni. */
+enum class FunctionTab { TABLE, GRAPH, ANALYSIS, STUDY }
 
 /** Caselle modificabili: le due funzioni (g facoltativa) e i parametri di tabella e analisi. */
 enum class FunctionCell(val default: String) {
@@ -14,6 +14,8 @@ enum class FunctionCell(val default: String) {
     POINT("1"),
     FROM("0"),
     TO("1"),
+    STUDY_FROM("-10"),
+    STUDY_TO("10"),
 }
 
 /** Un risultato dell'analisi: un valore (eventualmente approssimato) o un errore. */
@@ -35,6 +37,8 @@ data class FunctionAnalysisResult(
     val integral: AnalysisItem,
     val zeros: AnalysisItem,
     val intersections: AnalysisItem? = null,
+    /** Limite di f per x → x₀ (o ±∞) nel verso scelto; null se non si è potuto calcolare (x₀ non valido). */
+    val limit: LimitResult? = null,
 )
 
 /** Una riga della tabella: x, f(x) e, se c'è la seconda funzione, g(x). */
@@ -48,6 +52,8 @@ class FunctionSheet(
     cells: Map<FunctionCell, String> = emptyMap(),
     tab: FunctionTab = FunctionTab.TABLE,
     var angleUnit: AngleUnit = AngleUnit.RADIANS,
+    /** Verso del limite nella vista Analisi. */
+    var limitSide: LimitSide = LimitSide.BOTH,
 ) {
     private val cells: MutableMap<FunctionCell, String> =
         FunctionCell.entries.associateWith { cells[it] ?: it.default }.toMutableMap()
@@ -70,6 +76,7 @@ class FunctionSheet(
             FunctionTab.TABLE -> FUNCTIONS + listOf(FunctionCell.TABLE_START, FunctionCell.TABLE_STEP)
             FunctionTab.GRAPH -> FUNCTIONS
             FunctionTab.ANALYSIS -> FUNCTIONS + listOf(FunctionCell.POINT, FunctionCell.FROM, FunctionCell.TO)
+            FunctionTab.STUDY -> FUNCTIONS + listOf(FunctionCell.STUDY_FROM, FunctionCell.STUDY_TO)
         }
 
     fun setTab(t: FunctionTab) {
@@ -97,6 +104,11 @@ class FunctionSheet(
         if (key is CalcKey.Variable && key.name == 'X' && selected !in FUNCTIONS) return
         val current = cells.getValue(selected)
         cells[selected] = CalculatorEditor.onKey(CalculatorState(current), key, angleUnit).state.expression
+    }
+
+    /** Tocco sul verso del limite: x → x₀, x₀⁻, x₀⁺, +∞, −∞. */
+    fun cycleLimitSide() {
+        limitSide = LimitSide.entries[(limitSide.ordinal + 1) % LimitSide.entries.size]
     }
 
     fun clearAll() {
@@ -168,6 +180,18 @@ class FunctionSheet(
                     AnalysisItem.Value(r.value, r.approximate)
                 },
                 zeros = item { AnalysisItem.Values(FunctionAnalysis.zeros(f, number(FunctionCell.FROM), number(FunctionCell.TO))) },
+                limit = try {
+                    val x0 = if (limitSide == LimitSide.PLUS_INFINITY || limitSide == LimitSide.MINUS_INFINITY) {
+                        BigDecimal.ZERO
+                    } else {
+                        number(FunctionCell.POINT)
+                    }
+                    FunctionLimits.limit(f, x0, limitSide)
+                } catch (e: CalcException) {
+                    null
+                } catch (e: ArithmeticException) {
+                    null
+                },
                 intersections = g?.let {
                     item {
                         // Le intersezioni sono gli zeri di f − g.
@@ -178,6 +202,22 @@ class FunctionSheet(
                 },
             ),
         )
+    }
+
+    /** Studio di f nell'intervallo scelto (qualche secondo: fuori dal thread principale). */
+    fun study(variables: Map<Char, BigDecimal> = emptyMap()): Result<FunctionStudyResult> {
+        val f = function(variables).getOrElse { return Result.failure(it) }
+        val from = (parameter(FunctionCell.STUDY_FROM) as? EvalResult.Success)?.value
+            ?: return Result.failure(CalcException(CalcError.SYNTAX))
+        val to = (parameter(FunctionCell.STUDY_TO) as? EvalResult.Success)?.value
+            ?: return Result.failure(CalcException(CalcError.SYNTAX))
+        return try {
+            Result.success(FunctionStudy.study(f, from, to))
+        } catch (e: CalcException) {
+            Result.failure(e)
+        } catch (e: ArithmeticException) {
+            Result.failure(CalcException(CalcError.OVERFLOW))
+        }
     }
 
     companion object {

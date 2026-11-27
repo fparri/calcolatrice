@@ -58,7 +58,7 @@ class FitTextView(context: Context) : TextView(context) {
     val availableWidth: Int get() = max(0, width - compoundPaddingLeft - compoundPaddingRight)
 
     /** Larghezza di [text] alla dimensione minima: se supera [availableWidth] il testo va accorciato. */
-    fun widthAtMinimum(text: CharSequence): Float = measure(text, minTextPx)
+    fun widthAtMinimum(text: CharSequence): Float = measure(mathSpans(text), minTextPx)
 
     /** Larghezza del testo alla dimensione [size], compresi gli span (le frazioni su due livelli). */
     private fun measure(text: CharSequence, size: Float): Float {

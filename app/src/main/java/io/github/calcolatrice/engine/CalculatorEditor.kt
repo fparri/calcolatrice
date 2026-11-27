@@ -23,6 +23,8 @@ sealed interface CalcKey {
     data object Exp10 : CalcKey
     /** ×10ⁿ: notazione scientifica (`6.02E23`); da solo vale 1×10ⁿ. */
     data object Exponent : CalcKey
+    /** Frazione su due livelli (tasto ▫/▫): il cursore va nel numeratore. */
+    data object Fraction : CalcKey
     /** Parentesi "intelligente": apre o chiude in base al contesto. */
     data object Parentheses : CalcKey
     /** `;`: separa gli argomenti delle funzioni come `log(2;8)` o `nCr(5;2)`. */
@@ -61,6 +63,36 @@ object ExpressionText {
     private val FUNCTION_TOKENS = Tokenizer.FUNCTIONS.map { "$it(" }
 
     /**
+     * Frazioni su due livelli nel formato interno: `{numeratore~denominatore}`. I tre segni si inseriscono
+     * e si cancellano sempre insieme, quindi una frazione è sempre completa.
+     */
+    const val FRACTION_OPEN = '{'
+    const val FRACTION_BAR = '~'
+    const val FRACTION_CLOSE = '}'
+
+    /**
+     * Inizio della parte in cui si sta scrivendo: subito dopo `{` o `~` della frazione aperta più
+     * all'interno, oppure 0 fuori dalle frazioni. Parentesi e `;` contano solo in questa parte.
+     */
+    fun slotStart(s: String): Int {
+        val stack = ArrayDeque<Int>()
+        s.forEachIndexed { i, c ->
+            when (c) {
+                FRACTION_OPEN -> stack.addLast(i + 1)
+                FRACTION_BAR -> if (stack.isNotEmpty()) {
+                    stack.removeLast()
+                    stack.addLast(i + 1)
+                }
+                FRACTION_CLOSE -> stack.removeLastOrNull()
+            }
+        }
+        return stack.lastOrNull() ?: 0
+    }
+
+    /** True se [s] contiene una frazione su due livelli. */
+    fun hasFraction(s: CharSequence): Boolean = s.contains(FRACTION_OPEN)
+
+    /**
      * Sostituisce `@` con il valore di Ans. Un valore negativo va tra parentesi se non è in prima posizione
      * o se è seguito da `^ ! %`: altrimenti `−5^2` si leggerebbe −(5²) invece di (−5)².
      */
@@ -86,7 +118,7 @@ object ExpressionText {
      */
     fun openFunction(s: String): String? {
         val stack = ArrayDeque<String>()
-        var i = 0
+        var i = slotStart(s)
         while (i < s.length) {
             val token = FUNCTION_TOKENS.firstOrNull { s.startsWith(it, i) }
             when {
@@ -122,7 +154,7 @@ object ExpressionText {
     /** True se l'espressione termina con un operando completo (numero, costante, variabile, parentesi chiusa...). */
     fun endsWithOperand(s: String): Boolean {
         val c = s.lastOrNull() ?: return false
-        return c.isDigit() || c == '.' || c in ")πe!%@" || c in VARIABLES
+        return c.isDigit() || c == '.' || c in ")πe!%@" || c == FRACTION_CLOSE || c in VARIABLES
     }
 
     fun endsWithFunctionToken(s: String): String? = FUNCTION_TOKENS.firstOrNull { s.endsWith(it) }
@@ -146,6 +178,42 @@ object ExpressionText {
         return spans
     }
 
+    /**
+     * Dove inizia l'operando che termina in fondo a [s] (numero, variabile, parentesi, funzione, frazione,
+     * con eventuali √ davanti, !/% dopo e potenze), oppure null se [s] non termina con un operando.
+     * È il numeratore che il tasto ÷ prende in modalità "come Casio".
+     */
+    fun operandStart(s: String): Int? {
+        if (!endsWithOperand(s)) return null
+        var end = s.length
+        while (end > 0 && s[end - 1] in "!%") end--
+        if (end == 0) return null
+        var start = when (val c = s[end - 1]) {
+            ')', FRACTION_CLOSE -> {
+                val open = if (c == ')') '(' else FRACTION_OPEN
+                var depth = 0
+                var k = end - 1
+                while (k >= 0) {
+                    if (s[k] == c) depth++
+                    if (s[k] == open && --depth == 0) break
+                    k--
+                }
+                if (k < 0) return null
+                // Il nome della funzione fa parte dell'operando: sin(30) intero.
+                val function = FUNCTION_TOKENS.firstOrNull { s.startsWith(it, k - it.length + 1) && k - it.length + 1 >= 0 }
+                if (c == ')' && function != null) k - function.length + 1 else k
+            }
+            else -> if (c.isDigit() || c == '.') end - currentNumber(s.substring(0, end)).length else end - 1
+        }
+        while (start > 0 && s[start - 1] == '√') start--
+        // Una potenza resta intera: 2^3 ÷ … → (2³)/….
+        if (start > 0 && s[start - 1] == '^') {
+            val base = operandStart(s.substring(0, start - 1))
+            if (base != null) start = base
+        }
+        return start
+    }
+
     /** Porta una posizione interna a un token al suo inizio (direction < 0) o alla sua fine. */
     fun snap(s: String, position: Int, direction: Int = 1): Int {
         val span = tokenSpans(s).firstOrNull { position > it.first && position <= it.last } ?: return position
@@ -163,6 +231,8 @@ object CalculatorEditor {
         key: CalcKey,
         angleUnit: AngleUnit,
         variables: Map<Char, BigDecimal> = emptyMap(),
+        /** Modalità "come Casio": il tasto ÷ scrive una frazione su due livelli. */
+        divisionMakesFraction: Boolean = false,
     ): Transition {
         if (key == CalcKey.Equals) return equals(state, angleUnit, variables)
         if (key == CalcKey.Clear) return Transition(CalculatorState())
@@ -173,6 +243,7 @@ object CalculatorEditor {
         val s = full.substring(0, position)
         val rest = full.substring(position)
         val fresh = state.justEvaluated
+        fractionKey(state, s, rest, key, divisionMakesFraction)?.let { return Transition(it) }
         // Dentro un esponente appena aperto ("1E", "1E-") vanno bene solo cifre, il segno meno e la cancellazione.
         val inExponent = !fresh && (s.endsWith('E') || s.endsWith("E-"))
         val exponentKey = key is CalcKey.Digit || key == CalcKey.Backspace || key == CalcKey.Operator('-')
@@ -191,6 +262,7 @@ object CalculatorEditor {
             CalcKey.ExpE -> operandStart(s, "e^(", fresh)
             CalcKey.Exp10 -> operandStart(s, "10^(", fresh)
             CalcKey.Exponent -> if (fresh) exponentAfterResult(state.ans) else exponent(s)
+            CalcKey.Fraction -> s // gestito da fractionKey
             CalcKey.Parentheses -> if (fresh) "(" else parentheses(s)
             CalcKey.Separator -> if (fresh) s else separator(s)
             CalcKey.OpenParen -> operandStart(s, "(", fresh)
@@ -207,6 +279,62 @@ object CalculatorEditor {
                 cursor = if (keepRest) prefix.length else null,
             ),
         )
+    }
+
+    /**
+     * Tasti che riguardano le frazioni su due livelli (il cursore finisce dentro la frazione, quindi non
+     * seguono la regola generale "testo prima del cursore + resto"); null per tutti gli altri casi.
+     */
+    private fun fractionKey(
+        state: CalculatorState,
+        s: String,
+        rest: String,
+        key: CalcKey,
+        divisionMakesFraction: Boolean,
+    ): CalculatorState? {
+        val fresh = state.justEvaluated
+        if (!fresh && (s.endsWith('E') || s.endsWith("E-"))) return null
+        val open = ExpressionText.FRACTION_OPEN
+        val bar = ExpressionText.FRACTION_BAR
+        val close = ExpressionText.FRACTION_CLOSE
+        fun place(before: String, after: String, cursor: Int) = state.copy(
+            expression = before + after,
+            justEvaluated = false,
+            error = null,
+            cursor = cursor.takeIf { it < (before + after).length },
+        )
+        val tail = if (fresh) "" else rest
+        return when {
+            key == CalcKey.Fraction -> {
+                // Frazione vuota, cursore nel numeratore.
+                val before = operandStart(s, open.toString(), fresh)
+                place(before, "$bar$close$tail", before.length)
+            }
+            key == CalcKey.Operator('/') && divisionMakesFraction -> {
+                if (fresh) return place("$open@$bar", "$close", 3)
+                // L'operando prima del cursore diventa il numeratore; il cursore va nel denominatore.
+                val start = ExpressionText.operandStart(s)
+                if (start == null) {
+                    val before = s + open
+                    place(before, "$bar$close$tail", before.length)
+                } else {
+                    val before = s.substring(0, start) + open + s.substring(start) + bar
+                    place(before, "$close$tail", before.length)
+                }
+            }
+            key == CalcKey.Backspace && !fresh -> when (s.lastOrNull()) {
+                // Dopo una frazione si entra nel denominatore; all'inizio del denominatore si torna al numeratore.
+                close, bar -> state.copy(cursor = s.length - 1, error = null)
+                open -> if (rest.startsWith("$bar$close")) {
+                    // Frazione vuota: sparisce.
+                    place(s.dropLast(1), rest.drop(2), s.length - 1)
+                } else {
+                    state.copy(cursor = s.length - 1, error = null)
+                }
+                else -> null
+            }
+            else -> null
+        }
     }
 
     /** Inserisce un valore (per esempio dalla cronologia) nella posizione del cursore. */
@@ -327,11 +455,13 @@ object CalculatorEditor {
             if (trimmed.endsWith('E')) return if (op == '-') "$trimmed-" else trimmed
             return when {
                 trimmed.isEmpty() -> if (op == '-') "-" else ""
-                trimmed.last() in "(;√" -> if (op == '-') "$trimmed-" else trimmed
+                trimmed.last() in "(;√{~" -> if (op == '-') "$trimmed-" else trimmed
                 else -> trimmed + op
             }
         }
-        if (last == '(' || last == ';') return if (op == '-') s + op else s
+        if (last == '(' || last == ';' || last == ExpressionText.FRACTION_OPEN || last == ExpressionText.FRACTION_BAR) {
+            return if (op == '-') s + op else s
+        }
         if (last == '√') return s
         // Dopo la E dell'esponente è ammesso solo il meno (1E-5).
         if (last == 'E') return if (op == '-') "$s-" else s
@@ -368,8 +498,10 @@ object CalculatorEditor {
     }
 
     private fun parentheses(s: String): String {
-        val open = s.count { it == '(' }
-        val close = s.count { it == ')' }
+        // Dentro una frazione contano solo le parentesi della parte in cui si scrive.
+        val slot = s.substring(ExpressionText.slotStart(s))
+        val open = slot.count { it == '(' }
+        val close = slot.count { it == ')' }
         return when {
             ExpressionText.endsWithOperand(s) && open > close -> "$s)"
             ExpressionText.endsWithOperand(s) -> "$s*("
@@ -384,8 +516,9 @@ object CalculatorEditor {
     }
 
     private fun closeParen(s: String): String {
-        val open = s.count { it == '(' }
-        val close = s.count { it == ')' }
+        val slot = s.substring(ExpressionText.slotStart(s))
+        val open = slot.count { it == '(' }
+        val close = slot.count { it == ')' }
         return if (open > close && ExpressionText.endsWithOperand(s)) "$s)" else s
     }
 

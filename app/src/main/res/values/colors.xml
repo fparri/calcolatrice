@@ -30,5 +30,6 @@
     <!-- Colori pieni delle icone delle scorciatoie (a metà del gradiente delle due icone) -->
     <color name="ic_launcher_background">#FFF06A4D</color>
     <color name="ic_launcher_blue_background">#FF2C8BE0</color>
+    <color name="ic_launcher_graphite_background">#FF33363D</color>
     <color name="ic_launcher_foreground">#FFFFFFFF</color>
 </resources>

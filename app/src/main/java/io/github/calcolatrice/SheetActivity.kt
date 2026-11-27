@@ -122,13 +122,8 @@ abstract class SheetActivity : Activity() {
         return bar
     }
 
-    /** Chip "Frazioni": risultati in forma esatta sì/no. */
-    protected fun fractionChip(): Chip = Chip(this, palette, checkable = true).apply {
-        setOnClickListener { onAction(PadAction.ToggleFraction) }
-        contentDescription = getString(R.string.show_fractions)
-    }
-
-    protected fun Chip.showFraction(asFraction: Boolean) = update(getString(R.string.fraction_short), asFraction)
+    /** Chip "Frazioni" della barra in alto. */
+    protected fun fractionChip(): Chip = io.github.calcolatrice.ui.fractionChip(this, palette) { onAction(PadAction.ToggleFraction) }
 
     /** Testo per TalkBack: le formule lette a parole. */
     protected fun spoken(text: CharSequence): String =

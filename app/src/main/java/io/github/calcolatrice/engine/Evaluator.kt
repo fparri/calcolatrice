@@ -66,6 +66,10 @@ internal sealed interface Token {
     data object CloseParen : Token
     data object Separator : Token
     data object Sqrt : Token
+    /** Frazione scritta su due livelli: `{` numeratore `~` denominatore `}`. */
+    data object FractionOpen : Token
+    data object FractionBar : Token
+    data object FractionClose : Token
 }
 
 internal object Tokenizer {
@@ -114,6 +118,9 @@ internal object Tokenizer {
                 c == '(' -> tokens += Token.OpenParen
                 c == ')' -> tokens += Token.CloseParen
                 c == ';' -> tokens += Token.Separator
+                c == ExpressionText.FRACTION_OPEN -> tokens += Token.FractionOpen
+                c == ExpressionText.FRACTION_BAR -> tokens += Token.FractionBar
+                c == ExpressionText.FRACTION_CLOSE -> tokens += Token.FractionClose
                 c == '√' -> tokens += Token.Sqrt
                 c == 'π' || c == '@' -> tokens += Token.Constant(c)
                 c in VARIABLES -> tokens += Token.Variable(c)
@@ -247,7 +254,7 @@ internal class ExpressionParser private constructor(private val tokens: List<Tok
     }
 
     private fun startsOperand(t: Token) = t is Token.Number || t is Token.Constant || t is Token.Variable ||
-        t is Token.Function || t == Token.OpenParen || t == Token.Sqrt
+        t is Token.Function || t == Token.OpenParen || t == Token.Sqrt || t == Token.FractionOpen
 
     private fun unary(): Expr {
         val t = peek()
@@ -301,6 +308,13 @@ internal class ExpressionParser private constructor(private val tokens: List<Tok
             Expr.Call(t.name, args)
         }
         Token.Sqrt -> Expr.Sqrt(sqrtOperand())
+        Token.FractionOpen -> {
+            val numerator = expression()
+            if (next() != Token.FractionBar) throw CalcException(CalcError.SYNTAX)
+            val denominator = expression()
+            if (next() != Token.FractionClose) throw CalcException(CalcError.SYNTAX)
+            Expr.Quotient(numerator, denominator)
+        }
         else -> throw CalcException(CalcError.SYNTAX)
     }
 
@@ -318,11 +332,14 @@ internal class ExpressionParser private constructor(private val tokens: List<Tok
         return primary()
     }
 
-    /** Accetta ')' oppure la fine dell'espressione (parentesi chiusa automaticamente). */
+    /**
+     * Accetta ')' oppure la fine dell'espressione o di una parte di frazione: le parentesi lasciate
+     * aperte si chiudono da sole, come alla fine del calcolo.
+     */
     private fun expectCloseParen() {
         when (peek()) {
             Token.CloseParen -> pos++
-            null -> Unit
+            null, Token.FractionBar, Token.FractionClose -> Unit
             else -> throw CalcException(CalcError.SYNTAX)
         }
     }

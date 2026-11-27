@@ -36,6 +36,25 @@ class GraphView(context: Context, private val palette: Palette) : View(context) 
     var second: ((Double) -> Double)? = null
         private set
 
+    /**
+     * Punti e rette dello studio di funzione da segnare sul grafico: massimi e minimi (pieni), flessi (vuoti),
+     * zeri, asintoti tratteggiati. null = niente da segnare.
+     */
+    class StudyMarks(
+        val extrema: List<Pair<Double, Double>>,
+        val inflections: List<Pair<Double, Double>>,
+        val zeros: List<Double>,
+        val verticals: List<Double>,
+        /** Rette y = mx + q, con il lato (−1, +1 o 0 per entrambi). */
+        val lines: List<Triple<Double, Double, Int>>,
+    )
+
+    var marks: StudyMarks? = null
+        set(value) {
+            field = value
+            invalidate()
+        }
+
     /** Testo del punto selezionato (calcolato con il motore preciso da chi usa la vista). */
     var traceLabel: ((Double) -> String?)? = null
 
@@ -99,6 +118,13 @@ class GraphView(context: Context, private val palette: Palette) : View(context) 
         strokeWidth = dp(2f)
     }
     private val intersectionFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = palette.panel }
+    private val asymptotePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = withAlpha(palette.onBackgroundVariant, 200)
+        style = Paint.Style.STROKE
+        strokeWidth = dp(1.5f)
+        pathEffect = DashPathEffect(floatArrayOf(dp(6f), dp(6f)), 0f)
+    }
+    private val markFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = palette.accent }
     private val tracePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = palette.accent }
     private val secondTracePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = palette.onSelectedContainer }
     private val traceLinePaint = Paint().apply {
@@ -265,7 +291,9 @@ class GraphView(context: Context, private val palette: Palette) : View(context) 
             if (emptyMessage.isNotEmpty()) canvas.drawText(emptyMessage, width / 2f, height / 2f, messagePaint)
             return
         }
+        marks?.let { drawMarks(canvas, it) }
         drawCurve(canvas, f, curvePaint)
+        marks?.let { drawPoints(canvas, it) }
         val g = second
         if (g != null) {
             drawCurve(canvas, g, secondPaint)
@@ -369,6 +397,30 @@ class GraphView(context: Context, private val palette: Palette) : View(context) 
             px += step
         }
         canvas.drawPath(path, paint)
+    }
+
+    /** Asintoti dello studio, sotto la curva. */
+    private fun drawMarks(canvas: Canvas, m: StudyMarks) {
+        m.verticals.forEach { x ->
+            val px = toScreenX(x)
+            if (px in 0f..width.toFloat()) canvas.drawLine(px, 0f, px, height.toFloat(), asymptotePaint)
+        }
+        m.lines.forEach { (slope, q, side) ->
+            val from = if (side > 0) max(0.0, xMin) else xMin
+            val to = if (side < 0) min(0.0, xMax) else xMax
+            if (from >= to) return@forEach
+            canvas.drawLine(toScreenX(from), toScreenY(slope * from + q), toScreenX(to), toScreenY(slope * to + q), asymptotePaint)
+        }
+    }
+
+    /** Punti dello studio, sopra la curva: massimi e minimi pieni, flessi vuoti, zeri piccoli. */
+    private fun drawPoints(canvas: Canvas, m: StudyMarks) {
+        m.zeros.forEach { x -> canvas.drawCircle(toScreenX(x), toScreenY(0.0), dp(3.5f), intersectionPaint) }
+        m.inflections.forEach { (x, y) ->
+            canvas.drawCircle(toScreenX(x), toScreenY(y), dp(5f), intersectionFill)
+            canvas.drawCircle(toScreenX(x), toScreenY(y), dp(5f), intersectionPaint)
+        }
+        m.extrema.forEach { (x, y) -> canvas.drawCircle(toScreenX(x), toScreenY(y), dp(5.5f), markFill) }
     }
 
     /**

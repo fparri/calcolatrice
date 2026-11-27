@@ -116,7 +116,8 @@ class DisplayFormatter(
      */
     class Layout(val text: String, val positions: IntArray)
 
-    fun format(internal: String, ans: BigDecimal? = null): String = layout(internal, ans).text
+    /** Testo su una riga (le frazioni su due livelli diventano `a/b`): cronologia, appunti, risultati. */
+    fun format(internal: String, ans: BigDecimal? = null): String = FractionText.linearize(layout(internal, ans).text)
 
     fun layout(internal: String, ans: BigDecimal? = null): Layout {
         val s = if (ans != null) ExpressionText.expandAns(internal, ans) else internal

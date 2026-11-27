@@ -27,10 +27,12 @@ app/src/main/java/io/github/calcolatrice/
 │   ├── BigMath.kt                 exp, ln, sin/cos, atan, √, erfc in BigDecimal a 50 cifre
 │   ├── MoreMath.kt                Menu MATH: radice n-esima, log in base b, nCr, nPr, MCD, mcm, binomiale, normale
 │   ├── ExactForms.kt              Frazioni e forme esatte dei risultati: p/q, (p/q)·√r, (p/q)·π
-│   ├── Inequalities.kt            Disequazioni di 1° e 2° grado, insiemi di intervalli, sistemi, testo delle soluzioni
+│   ├── Inequalities.kt            Disequazioni di 1° e 2° grado e fratte, insiemi di intervalli, sistemi, testo delle soluzioni
 │   ├── FastEval.kt                Valutazione in double dello stesso albero, per i grafici
 │   ├── FunctionAnalysis.kt        Derivata, integrale, zeri e tabella di f(X) a 34 cifre
-│   ├── FunctionSheet.kt           Stato della schermata funzioni (caselle, vista, analisi)
+│   ├── FunctionSheet.kt           Stato della schermata funzioni (caselle, vista, analisi, studio)
+│   ├── FunctionStudy.kt           Studio di funzione numerico con l'affidabilità di ogni risultato
+│   ├── FunctionLimits.kt          Limiti numerici (lati, ±∞) con estrapolazione di Richardson e Aitken
 │   ├── TextWindow.kt              Parte di un testo da mostrare su una riga troppo corta
 │   ├── FractionText.kt            Posizione delle frazioni nel testo di un risultato esatto
 │   ├── CalculatorEditor.kt        Regole di inserimento dei tasti e cursore
@@ -46,6 +48,8 @@ app/src/main/java/io/github/calcolatrice/
     ├── KeyButton.kt               Tasto disegnato a mano, con cambio di forma alla pressione
     ├── SpringInterpolator.kt      Animazione a molla (Material 3 Expressive) senza AndroidX
     ├── Chip.kt                    Chip di Material 3 (DEG/RAD, Frazioni)
+    ├── StudyText.kt               Testo dello studio di funzione, con i segni di affidabilità
+    ├── CalculatorStore.kt         Salvataggio della calcolatrice (calcolo in corso, cronologia, angoli, variabili)
     ├── Keys.kt                    Definizione dei tasti e delle azioni
     ├── KeyPad.kt                  Costruzione di righe e griglie di tasti, tastiera fisica
     ├── Settings.kt                Formato dei numeri e variabili, condivisi tra le schermate
@@ -69,6 +73,8 @@ integrali e tabelle lo analizzano una volta sola. Formato del testo:
 - numeri con il punto decimale, eventualmente `1.5E-7` (il tasto ×10ⁿ scrive la E; dentro l'esponente
   l'editor accetta solo cifre e il meno; sullo schermo diventa `1,5×10⁻⁷`, negli appunti resta la E); operatori `+ - * / ^`; postfissi `!` e `%`
 - `π`, `e`, `@` (risultato precedente, a piena precisione), `√` prefisso, funzioni `sin(` `asin(` `ln(` `log(` ecc.
+- frazioni su due livelli `{numeratore~denominatore}`, anche annidate: il parser le legge come un operando
+  (un quoziente tra parentesi) e chiude da sé le parentesi rimaste aperte in una delle due parti
 - funzioni con più argomenti separati da `;`: `log(b;x)`, `root(n;x)`, `ncr(n;k)`, `npr(n;k)`, `gcd(a;b;…)`,
   `lcm(a;b;…)`, `binp(n;p;k)`, `binc(n;p;k)`, `normc(a;b)` e `normc(a;b;μ;σ)`, più `abs(`. Il numero di argomenti
   ammesso è in `Tokenizer.ARITY`; l'editor accetta `;` solo dentro una funzione che ne prevede più d'uno.
@@ -115,7 +121,11 @@ le somme di radicali diversi e le forme (a + b√c)/d, che richiederebbero un al
 
 `Inequalities.solve` prende le radici da `QuadraticEquation` e controlla il segno del polinomio in un punto interno
 di ogni tratto; le radici stesse soddisfano solo ≥ e ≤. Il risultato è un insieme di intervalli disgiunti
-(`SolutionSet`), e un sistema è l'intersezione dei due insiemi. `InequalityText` lo scrive in forma algebrica
+(`SolutionSet`), e un sistema (fino a tre righe, `EquationMode.INEQUALITY`) è l'intersezione degli insiemi.
+Le fratte (`EquationMode.RATIONAL`, riga 0 numeratore e riga 1 denominatore, verso salvato all'indice
+`RATIONAL_RELATION`) usano lo stesso `fromRoots`: radici di numeratore e denominatore insieme (un fattore comune
+conta una volta sola), segno = prodotto dei due segni, e gli zeri del denominatore esclusi anche con ≥ e ≤;
+`RationalSolution.excluded` dà la condizione di esistenza mostrata sopra le soluzioni. `InequalityText` lo scrive in forma algebrica
 (`x < −1 ∨ x > 3`, `x ≠ 2`) e come intervalli, all'italiana (`]−∞; −1[`) o all'inglese (`(−∞, −1)`).
 
 ### Funzioni e grafici
@@ -134,6 +144,35 @@ di ogni tratto; le radici stesse soddisfano solo ≥ e ≤. Il risultato è un i
   con i punti d'incontro cerchiati (cambi di segno di f − g in double, affinati per bisezione) e l'analisi
   aggiunge le intersezioni in [a, b], cioè gli zeri di `(f)-(g)` calcolati come quelli di f.
 - L'analisi gira in un thread separato: il risultato si mostra solo se nel frattempo non è cambiato nulla.
+
+### Limiti
+
+`FunctionLimits.limit(f, x0, side)` calcola f in x₀ ± h con h = H/2ᵏ (24 passi, 34 cifre; per ±∞ x = ±1/h)
+e guarda gli ultimi 12 valori: differenze che si riducono → converge (Richardson su h, h², …, oppure Δ² di
+Aitken se l'errore va come √h, tenendo la stima più coerente; le cifre su cui le stime concordano decidono
+l'arrotondamento e una frazione con denominatore ≤ 1000 entro quella precisione viene presa esatta); |f| che
+cresce sempre con lo stesso segno → ±∞ (veloce: ≈, lenta come ln: da verificare); overflow → ±∞; oscillazioni
+che si smorzano (x·sin(1/x)) → valore da verificare; altrimenti non esiste. Il risultato non è mai "certo".
+
+### Studio di funzione
+
+`FunctionStudy.study(f, a, b)` campiona f su 800 punti con il calcolo veloce e raffina a 34 cifre:
+
+- **dominio**: confini dove f smette di essere definita (bisezione su "definita/non definita") e poli, cioè
+  cambi di segno senza zero (bisezione sul segno) o massimi altissimi di |f| (poli di ordine pari), confermati
+  se |f| cresce avvicinandosi (`diverges`, che conta anche l'overflow: e^(1/x));
+- **simmetrie**: f(−x) = ±f(x) su 24 punti a 34 cifre;
+- **zeri e segno**: `FunctionAnalysis.zeros`, poi il segno in un punto interno di ogni tratto;
+- **crescenza**: cambi di segno della derivata stimata in double, confermati con `FunctionAnalysis.derivative`
+  e raffinati con il risolutore; uno spigolo (|x| in 0) si trova per bisezione. I confini del dominio e i poli
+  non sono mai punti stazionari;
+- **concavità**: lo stesso con f″ (differenze centrali a 34 cifre, circa 15 cifre corrette): per questo ≈;
+- **asintoti**: verticali nei poli e nei confini dove f esplode; orizzontali e obliqui con x = ±10⁶, ±10⁹,
+  ±10¹²: m e q devono stabilizzarsi, e una retta non è asintoto di sé stessa. Sono `Reliability.RISKY`.
+
+Gli insiemi usano −∞ e +∞ per i tratti che arrivano agli estremi dell'intervallo. `StudyText` scrive il
+risultato con i segni di affidabilità; il grafico disegna i punti (`GraphView.StudyMarks`) finché non cambiano
+la funzione o i parametri.
 
 ### Display su una riga
 
@@ -155,7 +194,18 @@ Con la forma esatta attiva, `FractionText.find` trova nel testo del risultato le
 sulla linea di frazione all'altezza del segno meno, e allarga la riga quanto serve (`getSize` modifica le
 metriche). Il testo sotto gli span non cambia: copia e TalkBack restano quelli di prima. Si usa nel display e
 nell'anteprima della calcolatrice, nei risultati di equazioni e disequazioni, nella tabella e nell'analisi
-delle funzioni. L'espressione in scrittura resta lineare.
+delle funzioni.
+
+Anche l'espressione in scrittura può contenere frazioni (`{3~4}`). L'editor inserisce e cancella i tre segni
+sempre insieme: il tasto ▫/▫ (`CalcKey.Fraction`) mette `{~}` col cursore nel numeratore; in modalità "come
+Casio" (`divisionMakesFraction`, impostazione `division_makes_fraction`) ÷ racchiude l'operando prima del
+cursore (`ExpressionText.operandStart`) e porta il cursore nel denominatore. ⌫ dopo `}` o `~` sposta il
+cursore dentro invece di cancellare; `{~}` vuota sparisce. Parentesi e `;` contano solo nella parte in cui si
+scrive (`ExpressionText.slotStart`). Sullo schermo `mathSpans` copre ogni frazione con un `FractionSpan`
+che contiene numeratore e denominatore come testi con span, disegnati da `MathText` (frazioni annidate più
+piccole, cursore colorato, riquadro per le parti vuote). Il taglio del display su una riga non spezza mai una
+frazione (`FractionText.outside`). Cronologia, appunti e TalkBack usano il testo su una riga
+(`FractionText.linearize`: `3/4`, `(1+2)/5`).
 
 ### Equazioni e sistemi
 
@@ -229,21 +279,23 @@ Frazioni (`Chip`), contenitori tonali con angoli di 28 dp per pannello scientifi
 
 ### Icona
 
-Due icone adattive (`mipmap-anydpi-v26/ic_launcher.xml` corallo e `ic_launcher_blue.xml` azzurra, sufficienti
+Tre icone adattive (`mipmap-anydpi-v26/ic_launcher.xml` corallo, `ic_launcher_blue.xml` azzurra e
+`ic_launcher_graphite.xml` grafite, sufficienti
 con minSdk 26) a tre livelli vettoriali di 108 dp: sfondo con un gradiente leggero
-(`drawable/ic_launcher[_blue]_background.xml`), primo piano con i quattro tasti + − × = in una griglia di 48 dp
-(`ic_launcher[_blue]_foreground.xml`) e livello monocromatico comune per le icone a tema di Android 13+
+(`drawable/ic_launcher[_blue|_graphite]_background.xml`), primo piano con i quattro tasti + − × = in una griglia di 48 dp
+(`ic_launcher[_blue|_graphite]_foreground.xml`) e livello monocromatico comune per le icone a tema di Android 13+
 (`ic_launcher_monochrome.xml`). Tutto il disegno sta nel cerchio della zona sicura di 66 dp, quindi nessuna
 maschera del launcher lo taglia; niente ombre né forme ritagliate a mano. I file si rigenerano con
 `python3 tools/make_icon.py app/src/main/res <cartella>`, che salva nella cartella anche le anteprime SVG.
 L'icona da 512 px per il Play Store non fa parte dell'APK: si esporta dalle stesse anteprime.
 
 L'icona sulla Home segue i colori scelti. `MainActivity` non compare da sola tra le app: il manifest dichiara
-due `activity-alias` (`.IconCoral`, attivo, e `.IconBlue`, spento), ognuno con la sua icona e le sue scorciatoie
-(`shortcuts.xml` e `shortcuts_blue.xml`). `LauncherIcon.apply` accende quello giusto e spegne l'altro con
+tre `activity-alias` (`.IconCoral`, attivo, `.IconBlue` e `.IconGraphite`, spenti), ognuno con la sua icona e le
+sue scorciatoie (`shortcuts.xml`, `shortcuts_blue.xml`, `shortcuts_graphite.xml`). L'icona grafite è quella
+dei colori "dal sistema". `LauncherIcon.apply` accende quello giusto e spegne l'altro con
 `setComponentEnabledSetting(…, DONT_KILL_APP)`, prima il nuovo, così l'app non resta mai senza icona. Su alcuni
 launcher l'icona sparisce dalla Home e va riaggiunta, e l'app può chiudersi un attimo: per questo, prima di
-cambiare icona, un dialogo avvisa. Con "dal sistema" resta l'icona corallo.
+cambiare icona, un dialogo avvisa.
 
 ### Tablet, pieghevoli e accessibilità
 

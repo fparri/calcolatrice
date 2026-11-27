@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Livello in primo piano: quattro tasti (+ − × =) in una griglia 2×2 di 48 dp, al centro della tela
+    da 108 dp e quindi dentro la zona sicura di 66 dp. Generato da tools/make_icon.py.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:pathData="M36.5,30H45A6.5,6.5 0,0 1,51.5,36.5V45A6.5,6.5 0,0 1,45,51.5H36.5A6.5,6.5 0,0 1,30,45V36.5A6.5,6.5 0,0 1,36.5,30ZM63,30H71.5A6.5,6.5 0,0 1,78,36.5V45A6.5,6.5 0,0 1,71.5,51.5H63A6.5,6.5 0,0 1,56.5,45V36.5A6.5,6.5 0,0 1,63,30ZM36.5,56.5H45A6.5,6.5 0,0 1,51.5,63V71.5A6.5,6.5 0,0 1,45,78H36.5A6.5,6.5 0,0 1,30,71.5V63A6.5,6.5 0,0 1,36.5,56.5Z"
+        android:fillColor="#5A5F6A" />
+    <path
+        android:pathData="M63,56.5H71.5A6.5,6.5 0,0 1,78,63V71.5A6.5,6.5 0,0 1,71.5,78H63A6.5,6.5 0,0 1,56.5,71.5V63A6.5,6.5 0,0 1,63,56.5Z"
+        android:fillColor="#FF9F43" />
+    <path
+        android:pathData="M35.75,40.75L45.75,40.75M40.75,35.75L40.75,45.75M62.25,40.75L72.25,40.75M36.93,63.43L44.57,71.07M36.93,71.07L44.57,63.43"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3.1"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M62.25,64.75L72.25,64.75M62.25,69.75L72.25,69.75"
+        android:strokeColor="#3A1E00"
+        android:strokeWidth="3.1"
+        android:strokeLineCap="round" />
+</vector>

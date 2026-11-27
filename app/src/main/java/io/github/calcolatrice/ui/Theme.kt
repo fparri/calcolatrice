@@ -154,30 +154,34 @@ fun Activity.applyColorTheme() {
 }
 
 /**
- * Icona dell'app sulla schermata Home: corallo o azzurra. Il manifest dichiara due activity-alias
- * della stessa schermata, uno per icona; se ne tiene attivo uno solo. Con i colori del sistema
- * resta l'icona corallo (le icone a tema le colora il sistema con il livello monocromatico).
+ * Icona dell'app sulla schermata Home: corallo, azzurra o grafite (per i colori del sistema). Il manifest
+ * dichiara un activity-alias della stessa schermata per ogni icona; se ne tiene attivo uno solo.
  */
 object LauncherIcon {
     private const val CORAL = "io.github.calcolatrice.IconCoral"
     private const val BLUE = "io.github.calcolatrice.IconBlue"
+    private const val GRAPHITE = "io.github.calcolatrice.IconGraphite"
+    private val ALL = listOf(CORAL, BLUE, GRAPHITE)
 
-    private fun aliasFor(theme: ColorTheme) = if (theme == ColorTheme.BLUE) BLUE else CORAL
+    private fun aliasFor(theme: ColorTheme) = when (theme) {
+        ColorTheme.CORAL -> CORAL
+        ColorTheme.BLUE -> BLUE
+        ColorTheme.SYSTEM -> GRAPHITE
+    }
 
     /** True se scegliendo [theme] l'icona sulla Home cambierebbe. */
     fun changes(context: Context, theme: ColorTheme): Boolean = !isEnabled(context, aliasFor(theme))
 
-    /** Attiva l'icona di [theme] e spegne l'altra (prima si accende la nuova: non resta mai senza icona). */
+    /** Attiva l'icona di [theme] e spegne le altre (prima si accende la nuova: non resta mai senza icona). */
     fun apply(context: Context, theme: ColorTheme) {
         val wanted = aliasFor(theme)
-        val other = if (wanted == CORAL) BLUE else CORAL
         set(context, wanted, PackageManager.COMPONENT_ENABLED_STATE_ENABLED)
-        set(context, other, PackageManager.COMPONENT_ENABLED_STATE_DISABLED)
+        ALL.filter { it != wanted }.forEach { set(context, it, PackageManager.COMPONENT_ENABLED_STATE_DISABLED) }
     }
 
     private fun isEnabled(context: Context, alias: String): Boolean {
         val state = context.packageManager.getComponentEnabledSetting(ComponentName(context, alias))
-        // Stato predefinito: quello del manifest (attivo solo l'icona corallo).
+        // Stato predefinito: quello del manifest (attiva solo l'icona corallo).
         return when (state) {
             PackageManager.COMPONENT_ENABLED_STATE_ENABLED -> true
             PackageManager.COMPONENT_ENABLED_STATE_DEFAULT -> alias == CORAL

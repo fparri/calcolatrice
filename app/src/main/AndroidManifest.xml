@@ -12,8 +12,9 @@
         android:theme="@style/Theme.Calcolatrice.Coral">
 
         <!--
-            La schermata principale non compare da sola tra le app: ci sono due "ingressi" (activity-alias),
-            uno per icona, e se ne tiene attivo uno solo secondo i colori scelti (ui/LauncherIcon).
+            La schermata principale non compare da sola tra le app: ci sono tre "ingressi" (activity-alias),
+            uno per icona (corallo, azzurra, grafite), e se ne tiene attivo uno solo secondo i colori scelti
+            (ui/LauncherIcon).
         -->
         <activity
             android:name=".MainActivity"
@@ -47,6 +48,21 @@
             <meta-data
                 android:name="android.app.shortcuts"
                 android:resource="@xml/shortcuts_blue" />
+        </activity-alias>
+
+        <activity-alias
+            android:name=".IconGraphite"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_graphite"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts_graphite" />
         </activity-alias>
 
         <activity

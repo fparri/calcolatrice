@@ -142,10 +142,10 @@
 
     <!-- Disequazioni -->
     <string name="mode_inequality">Inequal.</string>
-    <string name="mode_inequality_description">Inequality ax² + bx + c greater or less than 0, or a system of two</string>
+    <string name="mode_inequality_description">Inequality ax² + bx + c greater or less than 0, or a system of two or three</string>
     <string name="formula_inequality" translatable="false">ax² + bx + c %1$s 0</string>
-    <string name="inequality_hint">Tap the sign to change it. The second row is optional: fill it in to solve a system.</string>
-    <string name="inequality_system">System of two inequalities</string>
+    <string name="inequality_hint">Tap the sign to change it. The second and third rows are optional: fill them in to solve a system.</string>
+    <string name="inequality_system">System of %1$d inequalities</string>
     <string name="all_real_solutions">Every real x is a solution</string>
     <string name="relation_description">Inequality %1$d: %2$s zero. Tap to change</string>
     <string name="relation_greater">greater than</string>
@@ -172,7 +172,7 @@
     <string name="analysis_to" translatable="false">b</string>
     <string name="parameter_description">%1$s: %2$s</string>
     <string name="undefined_short">undef.</string>
-    <string name="analysis_hint">Press = to calculate f(x₀), f′(x₀), the integral from a to b and the zeros between a and b</string>
+    <string name="analysis_hint">Press = to calculate f(x₀), f′(x₀), the integral from a to b, the zeros between a and b and the limit</string>
     <string name="analysis_running">Calculating…</string>
     <string name="analysis_zeros">Zeros between a and b</string>
     <string name="analysis_no_zeros">none</string>
@@ -206,4 +206,68 @@
     <string name="second_function_cell_description">Second function g of x: %1$s</string>
     <string name="analysis_intersections">Intersections of f and g between a and b</string>
     <string name="analysis_no_intersections">none</string>
+
+    <!-- Frazioni su due livelli -->
+    <string name="key_fraction">Fraction: numerator above, denominator below</string>
+    <string name="key_divide_fraction">Divide: writes a fraction</string>
+    <string name="key_cursor_left">Move the cursor left</string>
+    <string name="key_cursor_right">Move the cursor right</string>
+    <string name="fraction_input">Writing fractions</string>
+    <string name="fraction_input_key">With the ▫/▫ key (÷ stays a division)</string>
+    <string name="fraction_input_division">With ÷, like Casio calculators</string>
+
+    <!-- Disequazioni fratte -->
+    <string name="mode_rational">Rational</string>
+    <string name="mode_rational_description">Rational inequality N(x) / D(x) greater or less than 0</string>
+    <string name="formula_rational" translatable="false">N(x) / D(x) %1$s 0</string>
+    <string name="rational_hint">Write the coefficients of the numerator N(x) and the denominator D(x), at most of degree 2. Tap the sign to change it.</string>
+    <string name="rational_domain">Domain: %1$s</string>
+    <string name="rational_numerator">Numerator</string>
+    <string name="rational_denominator">Denominator</string>
+    <string name="rational_cell_description">%1$s, coefficient of %2$s: %3$s</string>
+
+    <!-- Studio di funzione -->
+    <string name="tab_study">Study</string>
+    <string name="tab_study_description">Full study of the function: domain, sign, increasing, maxima and minima, concavity, asymptotes</string>
+    <string name="study_hint">Choose the interval and press = to study f(x). The points found are also marked on the Graph.</string>
+    <string name="study_running">Studying the function…</string>
+    <string name="study_interval">Study between %1$s and %2$s (−∞ and +∞ stand for the ends of the interval)</string>
+    <string name="study_domain">Domain</string>
+    <string name="study_all_interval">the whole interval</string>
+    <string name="study_parity">Symmetry</string>
+    <string name="study_even">even: symmetric about the y-axis</string>
+    <string name="study_odd">odd: symmetric about the origin</string>
+    <string name="study_no_parity">neither even nor odd</string>
+    <string name="study_parity_unknown">cannot be decided: choose an interval symmetric about 0</string>
+    <string name="study_intersections">Intersections with the axes</string>
+    <string name="study_y_axis">y-axis: %1$s</string>
+    <string name="study_x_axis">x-axis: %1$s</string>
+    <string name="study_none">none</string>
+    <string name="study_always">always</string>
+    <string name="study_never">never</string>
+    <string name="study_sign">Sign</string>
+    <string name="study_positive">positive: %1$s</string>
+    <string name="study_negative">negative: %1$s</string>
+    <string name="study_monotonic">Increasing and decreasing</string>
+    <string name="study_increasing">increasing: %1$s</string>
+    <string name="study_decreasing">decreasing: %1$s</string>
+    <string name="study_maxima">maxima: %1$s</string>
+    <string name="study_minima">minima: %1$s</string>
+    <string name="study_concavity">Concavity</string>
+    <string name="study_convex">convex (concave up): %1$s</string>
+    <string name="study_concave">concave (concave down): %1$s</string>
+    <string name="study_inflections">inflection points: %1$s</string>
+    <string name="study_vertical">Vertical asymptotes</string>
+    <string name="study_lines">Horizontal and oblique asymptotes</string>
+    <string name="study_horizontal">horizontal</string>
+    <string name="study_oblique">oblique</string>
+    <string name="study_risky">to be checked</string>
+    <string name="study_legend">≈ found numerically: precise, but not guaranteed. "To be checked": estimated with very large values of x; confirm it with limits.</string>
+
+    <!-- Limiti -->
+    <string name="limit_label">Limit</string>
+    <string name="limit_side_description">Limit for %1$s. Tap to change: both sides, from the left, from the right, plus or minus infinity</string>
+    <string name="limit_oscillates">does not exist, the function oscillates</string>
+    <string name="limit_undefined">f is not defined near x₀ on this side</string>
+    <string name="limit_different">left and right limits differ: the limit does not exist</string>
 </resources>

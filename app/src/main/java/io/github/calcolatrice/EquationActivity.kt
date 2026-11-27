@@ -18,10 +18,10 @@ import io.github.calcolatrice.engine.InequalityText
 import io.github.calcolatrice.engine.LinearSolution
 import io.github.calcolatrice.engine.QuadraticSolution
 import io.github.calcolatrice.engine.Relation
-import io.github.calcolatrice.engine.SolutionSet
 import io.github.calcolatrice.engine.Vertex
 import io.github.calcolatrice.ui.stackedFractions
 import io.github.calcolatrice.ui.Chip
+import io.github.calcolatrice.ui.showFraction
 import io.github.calcolatrice.ui.KeyButton
 import io.github.calcolatrice.ui.PadAction
 import io.github.calcolatrice.ui.NamedValue
@@ -145,11 +145,16 @@ class EquationActivity : SheetActivity() {
         val outcome = sheet.outcome
         val errorCell = (outcome as? EquationOutcome.Error)?.cell
         val expressions = sheet.expressions()
-        // Nelle disequazioni la seconda riga è facoltativa: vuota, non conta e resta in disparte.
-        val unusedRow = if (mode == EquationMode.INEQUALITY && expressions.subList(3, 6).all { it.isEmpty() }) 1 else -1
+        // Nelle disequazioni la seconda e la terza riga sono facoltative: vuote, non contano e restano in disparte.
+        val unusedRows = if (mode == EquationMode.INEQUALITY) {
+            (1 until mode.equations).filter { r -> expressions.subList(r * 3, r * 3 + 3).all { it.isEmpty() } }.toSet()
+        } else {
+            emptySet()
+        }
+        val rational = mode == EquationMode.RATIONAL
         cellViews.forEachIndexed { index, cell ->
             val expression = expressions[index]
-            val unused = index / mode.coefficients == unusedRow
+            val unused = index / mode.coefficients in unusedRows
             val text = when {
                 unused -> ""
                 expression.isEmpty() -> "0"
@@ -160,18 +165,22 @@ class EquationActivity : SheetActivity() {
             cell.setTextColor(if (expression.isEmpty()) palette.onBackgroundVariant else palette.onBackground)
             cell.background = cellBackground(palette, selected, error = index == errorCell)
             cell.isSelected = selected
-            cell.contentDescription = getString(
-                R.string.cell_description,
-                index / mode.coefficients + 1,
-                LETTERS[index % mode.coefficients].toString(),
-                text,
-            )
+            cell.contentDescription = if (rational) {
+                getString(
+                    R.string.rational_cell_description,
+                    getString(if (index < 3) R.string.rational_numerator else R.string.rational_denominator),
+                    RATIONAL_POWERS[index % 3],
+                    text,
+                )
+            } else {
+                getString(R.string.cell_description, index / mode.coefficients + 1, LETTERS[index % mode.coefficients].toString(), text)
+            }
         }
 
         relationViews.forEachIndexed { row, view ->
-            val relation = sheet.relation(row)
+            val relation = sheet.relation(if (rational) EquationSheet.RATIONAL_RELATION else row)
             view.text = relation.symbol
-            view.alpha = if (row == unusedRow) UNUSED_ALPHA else 1f
+            view.alpha = if (row in unusedRows) UNUSED_ALPHA else 1f
             view.contentDescription = getString(R.string.relation_description, row + 1, relationName(relation))
         }
 
@@ -199,10 +208,16 @@ class EquationActivity : SheetActivity() {
 
     private fun describe(outcome: EquationOutcome?): Description = when (outcome) {
         null -> Description(
-            getString(if (sheet.mode == EquationMode.INEQUALITY) R.string.inequality_hint else R.string.solve_hint),
+            getString(
+                when (sheet.mode) {
+                    EquationMode.INEQUALITY -> R.string.inequality_hint
+                    EquationMode.RATIONAL -> R.string.rational_hint
+                    else -> R.string.solve_hint
+                },
+            ),
             emptyList(),
         )
-        is EquationOutcome.Inequality -> describeInequality(outcome.solution, outcome.system)
+        is EquationOutcome.Inequality -> describeInequality(outcome)
         is EquationOutcome.Error -> Description(getString(errorMessage(outcome.error)), emptyList())
         is EquationOutcome.System -> describeLinear(outcome.solution, listOf("x", "y", "z"))
         is EquationOutcome.Quadratic -> describeQuadratic(outcome.solution)
@@ -210,10 +225,17 @@ class EquationActivity : SheetActivity() {
     }
 
     /** Soluzioni in forma algebrica e, sotto, come intervalli; gli estremi si possono salvare. */
-    private fun describeInequality(solution: SolutionSet, system: Boolean): Description {
+    private fun describeInequality(outcome: EquationOutcome.Inequality): Description {
+        val solution = outcome.solution
         val italian = resources.configuration.locales[0].language == "it"
         val text = InequalityText(::value, italianIntervals = italian)
-        val title = if (system) getString(R.string.inequality_system) else null
+        // Sistema: quante disequazioni; fratta: la condizione di esistenza (zeri del denominatore esclusi).
+        val title = listOfNotNull(
+            if (outcome.system) getString(R.string.inequality_system, outcome.count) else null,
+            outcome.excluded.takeIf { it.isNotEmpty() }?.let { zeros ->
+                getString(R.string.rational_domain, zeros.joinToString(" ∧ ") { "x ≠ ${value(it)}" })
+            },
+        ).joinToString("\n").ifEmpty { null }
         return when {
             solution.isEmpty -> Description(listOfNotNull(title, getString(R.string.no_solution)).joinToString("\n"), emptyList())
             solution.isAll -> Description(
@@ -305,6 +327,7 @@ class EquationActivity : SheetActivity() {
         EquationMode.QUADRATIC -> getString(R.string.formula_quadratic)
         EquationMode.CUBIC -> getString(R.string.formula_cubic)
         EquationMode.INEQUALITY -> getString(R.string.formula_inequality, sheet.relation(0).symbol)
+        EquationMode.RATIONAL -> getString(R.string.formula_rational, sheet.relation(EquationSheet.RATIONAL_RELATION).symbol)
     }
 
     // ---------------------------------------------------------------- layout
@@ -364,11 +387,22 @@ class EquationActivity : SheetActivity() {
     private fun buildGrid(mode: EquationMode) {
         gridView.removeAllViews()
         val spacing = dp(6)
-        val inequality = mode == EquationMode.INEQUALITY
+        val inequality = mode == EquationMode.INEQUALITY || mode == EquationMode.RATIONAL
+        val rational = mode == EquationMode.RATIONAL
+        fun rowLabel(text: String) = TextView(this).apply {
+            this.text = text
+            textSize = 15f
+            gravity = Gravity.CENTER
+            setTextColor(palette.onBackgroundVariant)
+            typeface = Typeface.create("serif", Typeface.ITALIC)
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }
         val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        // Fratta: a sinistra di ogni riga N(x) o D(x); in alto le potenze di x.
+        if (rational) header.addView(View(this), LinearLayout.LayoutParams(0, 1, LABEL_WEIGHT))
         for (c in 0 until mode.coefficients) {
             val label = TextView(this).apply {
-                text = LETTERS[c].toString()
+                text = if (rational) RATIONAL_POWERS[c] else LETTERS[c].toString()
                 textSize = 15f
                 gravity = Gravity.CENTER
                 setTextColor(palette.onBackgroundVariant)
@@ -385,6 +419,7 @@ class EquationActivity : SheetActivity() {
         val relations = ArrayList<TextView>()
         for (r in 0 until mode.equations) {
             val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            if (rational) row.addView(rowLabel(if (r == 0) "N(x)" else "D(x)"), LinearLayout.LayoutParams(0, MATCH_PARENT, LABEL_WEIGHT))
             for (c in 0 until mode.coefficients) {
                 val index = r * mode.coefficients + c
                 val cell = TextView(this).apply {
@@ -400,9 +435,12 @@ class EquationActivity : SheetActivity() {
                     }
                 }
                 cells += cell
-                row.addView(cell, LinearLayout.LayoutParams(0, MATCH_PARENT, 1f).apply { if (c > 0) marginStart = spacing })
+                row.addView(cell, LinearLayout.LayoutParams(0, MATCH_PARENT, 1f).apply { if (c > 0 || rational) marginStart = spacing })
             }
-            if (inequality) {
+            if (rational && r > 0) {
+                // Un solo segno per la fratta: sulla riga del denominatore resta lo spazio vuoto.
+                row.addView(View(this), LinearLayout.LayoutParams(0, MATCH_PARENT, RELATION_WEIGHT).apply { marginStart = spacing })
+            } else if (inequality) {
                 // Il segno della disequazione: un tocco passa al successivo (> ≥ < ≤).
                 val relation = TextView(this).apply {
                     gravity = Gravity.CENTER
@@ -412,7 +450,7 @@ class EquationActivity : SheetActivity() {
                     isClickable = true
                     isFocusable = true
                     setOnClickListener {
-                        sheet.cycleRelation(r)
+                        sheet.cycleRelation(if (rational) EquationSheet.RATIONAL_RELATION else r)
                         render()
                     }
                 }
@@ -467,6 +505,8 @@ class EquationActivity : SheetActivity() {
         const val PREF_FRACTION = "fractions"
         const val KEY_SELECTED = "selected"
         const val LETTERS = "abcd"
+        val RATIONAL_POWERS = listOf("x²", "x", "1")
+        const val LABEL_WEIGHT = 0.55f
         const val SUBSCRIPTS = "₁₂₃"
         const val RELATION_WEIGHT = 0.6f
         const val UNUSED_ALPHA = 0.4f
