@@ -15,20 +15,49 @@ object FractionText {
     /** Numeratore: cifre (con i separatori), √ e π; denominatore: cifre. Il segno meno resta fuori. */
     private val FRACTION = Regex("""(\()?([0-9.,'’  √π]*[0-9π])/([0-9][0-9.,'’  ]*)(\))?""")
 
-    private val INNERMOST = Regex("""\{([^{}~]*)~([^{}~]*)}""")
     private val SIMPLE = Regex("""[0-9.,'’\u00A0\u202Fπe√A-Z]*[0-9πeA-Z]""")
 
     /**
      * Le frazioni su due livelli dell'editor (`{1~2}`, già formattate per lo schermo) scritte su una
      * riga: `1/2`, oppure `(1+x)/(3)` quando una parte non è un numero o un simbolo solo.
+     * Senza espressioni regolari: su Android (motore ICU) una `}` non preceduta da `\` nel pattern manda
+     * l'app in crash, mentre sulla JVM dei test funziona.
      */
     fun linearize(text: String): String {
-        var s = text
-        while (true) {
-            val m = INNERMOST.find(s) ?: return s
+        if (ExpressionText.FRACTION_OPEN !in text) return text
+        val out = StringBuilder()
+        var i = 0
+        while (i < text.length) {
+            val c = text[i]
+            if (c != ExpressionText.FRACTION_OPEN) {
+                out.append(c)
+                i++
+                continue
+            }
+            // Barra e chiusura della frazione che si apre in i (allo stesso livello).
+            var depth = 0
+            var bar = -1
+            var close = -1
+            for (k in i until text.length) {
+                when (text[k]) {
+                    ExpressionText.FRACTION_OPEN -> depth++
+                    ExpressionText.FRACTION_BAR -> if (depth == 1 && bar < 0) bar = k
+                    ExpressionText.FRACTION_CLOSE -> if (--depth == 0) {
+                        close = k
+                        break
+                    }
+                }
+            }
+            if (bar < 0 || close < 0) {
+                out.append(c)
+                i++
+                continue
+            }
             fun part(p: String) = if (SIMPLE.matches(p)) p else "($p)"
-            s = s.replaceRange(m.range, part(m.groupValues[1]) + "/" + part(m.groupValues[2]))
+            out.append(part(linearize(text.substring(i + 1, bar)))).append('/').append(part(linearize(text.substring(bar + 1, close))))
+            i = close + 1
         }
+        return out.toString()
     }
 
     /**
