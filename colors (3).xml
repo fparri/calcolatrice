@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Colori di risorsa. Le tavolozze corallo e azzurra sono in ui/Theme.kt (Schemes); qui ci sono:
+        - i colori dei temi delle finestre (sfondo all'avvio, accento di dialoghi e menu);
+        - i ruoli per "colori dal sistema", ridefiniti in values-v31 con i colori dinamici. Sotto
+          Android 12 quella scelta non c'è: questi valori (corallo) restano solo come riserva.
+    -->
+    <color name="background">#FFFFF8F6</color>
+    <color name="on_background">#FF231917</color>
+    <color name="on_background_variant">#FF534341</color>
+    <color name="panel">#FFFCEAE5</color>
+    <color name="accent">#FFB8432E</color>
+    <color name="on_accent">#FFFFFFFF</color>
+    <color name="outline">#FFD8C2BD</color>
+    <color name="error">#FFBA1A1A</color>
+    <color name="key_number">#FFF3E1DC</color>
+    <color name="key_operator">#FFFFDAD0</color>
+    <color name="on_key_operator">#FF5A1C0F</color>
+    <color name="key_clear">#FFFFE58A</color>
+    <color name="on_key_clear">#FF3D2D00</color>
+
+    <color name="coral_background">#FFFFF8F6</color>
+    <color name="coral_panel">#FFFCEAE5</color>
+    <color name="coral_accent">#FFB8432E</color>
+    <color name="blue_background">#FFF7F9FF</color>
+    <color name="blue_panel">#FFE9EEF7</color>
+    <color name="blue_accent">#FF1F63B8</color>
+
+    <!-- Colori pieni delle icone delle scorciatoie (a metà del gradiente delle due icone) -->
+    <color name="ic_launcher_background">#FFF06A4D</color>
+    <color name="ic_launcher_blue_background">#FF2C8BE0</color>
+    <color name="ic_launcher_foreground">#FFFFFFFF</color>
+</resources>

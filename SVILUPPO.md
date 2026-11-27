@@ -34,14 +34,18 @@ app/src/main/java/io/github/calcolatrice/
 │   ├── TextWindow.kt              Parte di un testo da mostrare su una riga troppo corta
 │   ├── FractionText.kt            Posizione delle frazioni nel testo di un risultato esatto
 │   ├── CalculatorEditor.kt        Regole di inserimento dei tasti e cursore
-│   ├── CalculatorSession.kt       Stato della calcolatrice: cronologia, variabili, memoria, SOLVE
-│   ├── Solver.kt                  SOLVE: Newton smorzato, poi ricerca di un cambio di segno
-│   ├── Formatting.kt              Formati NORM/FIX/SCI/ENG, testo per lo schermo, apici, posizioni, testo dei risultati
+│   ├── CalculatorSession.kt       Stato della calcolatrice: cronologia, variabili, anteprima
+│   ├── Solver.kt                  Risolutore numerico (zeri delle funzioni): Newton smorzato e cambi di segno
+│   ├── Formatting.kt              Formati NORM/FIX/SCI, testo per lo schermo, apici e ×10ⁿ, posizioni, testo dei risultati
+│   ├── SpokenMath.kt              Formule lette a parole per TalkBack ("3 quarti", "x al quadrato"), it/en
 │   ├── Equations.kt               Sistemi lineari, 2° e 3° grado
 │   ├── EquationSheet.kt           Stato della schermata equazioni (celle, selezione, risultato)
 │   └── Statistics.kt              Statistica a una variabile, regressione, stato della tabella
 └── ui/
-    ├── KeyButton.kt               Tasto disegnato a mano e colori del tema
+    ├── Theme.kt                   Colori (corallo, azzurro, dal sistema), tema delle finestre, icona sulla Home
+    ├── KeyButton.kt               Tasto disegnato a mano, con cambio di forma alla pressione
+    ├── SpringInterpolator.kt      Animazione a molla (Material 3 Expressive) senza AndroidX
+    ├── Chip.kt                    Chip di Material 3 (DEG/RAD, Frazioni)
     ├── Keys.kt                    Definizione dei tasti e delle azioni
     ├── KeyPad.kt                  Costruzione di righe e griglie di tasti, tastiera fisica
     ├── Settings.kt                Formato dei numeri e variabili, condivisi tra le schermate
@@ -52,17 +56,18 @@ app/src/main/java/io/github/calcolatrice/
     └── ViewUtils.kt               Edge-to-edge, insets, sfondi e altre utilità condivise
 app/src/main/res/                  Testi (it/en), colori, icone, tema di sistema
 app/src/test/                      Test unitari del motore di calcolo
-tools/make_icon.py                 Genera i tre livelli dell'icona e le anteprime dalla stessa geometria
+tools/make_icon.py                 Genera le icone corallo e azzurra e le anteprime dalla stessa geometria
 ```
 
 ### Formato interno delle espressioni
 
 L'editor costruisce un testo che `ExpressionParser` trasforma in un albero (`Expr`), valutato a ogni tasto
 per l'anteprima. Le regole (precedenze, percentuali, moltiplicazione implicita) stanno solo nel parser:
-lo stesso albero si valuta a 34 cifre (`Evaluation`) o in double per i grafici (`FastEval`), e SOLVE,
+lo stesso albero si valuta a 34 cifre (`Evaluation`) o in double per i grafici (`FastEval`), e zeri,
 integrali e tabelle lo analizzano una volta sola. Formato del testo:
 
-- numeri con il punto decimale, eventualmente `1.5E-7`; operatori `+ - * / ^`; postfissi `!` e `%`
+- numeri con il punto decimale, eventualmente `1.5E-7` (il tasto ×10ⁿ scrive la E; dentro l'esponente
+  l'editor accetta solo cifre e il meno; sullo schermo diventa `1,5×10⁻⁷`, negli appunti resta la E); operatori `+ - * / ^`; postfissi `!` e `%`
 - `π`, `e`, `@` (risultato precedente, a piena precisione), `√` prefisso, funzioni `sin(` `asin(` `ln(` `log(` ecc.
 - funzioni con più argomenti separati da `;`: `log(b;x)`, `root(n;x)`, `ncr(n;k)`, `npr(n;k)`, `gcd(a;b;…)`,
   `lcm(a;b;…)`, `binp(n;p;k)`, `binc(n;p;k)`, `normc(a;b)` e `normc(a;b;μ;σ)`, più `abs(`. Il numero di argomenti
@@ -124,7 +129,10 @@ di ogni tratto; le radici stesse soddisfano solo ≥ e ≤. Il risultato è un i
   (così ∫₋₁¹ 1/x non risulta 0). Se non basta si usa la quadratura tanh-sinh, che gestisce le singolarità agli estremi
   (√x, 1/√x, ln x in 0); se nemmeno questa converge il risultato è segnato come approssimato.
 - **Zeri**: 1000 campioni in double per trovare i cambi di segno, poi raffinamento a 34 cifre
-  (`NumericSolver.rootBetween`); i minimi di |f| vicini a zero si verificano con SOLVE (zeri doppi).
+  (`NumericSolver.rootBetween`); i minimi di |f| vicini a zero si verificano con il risolutore (zeri doppi).
+- **Seconda funzione g** (facoltativa): la tabella ha una colonna in più, il grafico la disegna tratteggiata
+  con i punti d'incontro cerchiati (cambi di segno di f − g in double, affinati per bisezione) e l'analisi
+  aggiunge le intersezioni in [a, b], cioè gli zeri di `(f)-(g)` calcolati come quelli di f.
 - L'analisi gira in un thread separato: il risultato si mostra solo se nel frattempo non è cambiato nulla.
 
 ### Display su una riga
@@ -171,9 +179,10 @@ delle funzioni. L'espressione in scrittura resta lineare.
 - **Coefficienti**: ogni cella è un'espressione modificata con `CalculatorEditor`, quindi segue le stesse
   regole della calcolatrice. Le celle sono salvate in `SharedPreferences` (file `equations`).
 
-### SOLVE
+### Risolutore numerico
 
-`NumericSolver` cerca uno zero dell'espressione nella variabile X: prima il metodo di Newton con
+Il tasto SOLVE è stato tolto (gli zeri si leggono nella schermata Funzioni), ma `NumericSolver` resta:
+lo usano gli zeri e le intersezioni dell'analisi. Cerca uno zero dell'espressione nella variabile X: prima il metodo di Newton con
 derivata numerica e passo smorzato (si dimezza finché |f| non diminuisce), poi, se non converge,
 cerca un cambio di segno allontanandosi dal valore iniziale a passi che raddoppiano (fino a circa 10⁴⁰)
 e lo restringe alternando bisezione e secante. Un cambio di segno attraverso un polo (come 1/X)
@@ -199,21 +208,49 @@ dati (massimo 200 righe). I dati sono salvati nel file `statistics`.
 
 | File `SharedPreferences` | Contenuto |
 |---|---|
-| `calculator` | calcolo in corso, cronologia, unità angolare, formato dei numeri, variabili, frazioni sì/no |
+| `calculator` | calcolo in corso, cronologia, unità angolare, formato dei numeri, variabili, frazioni sì/no, colori |
 | `equations` | coefficienti di ogni modalità, segni delle disequazioni, modalità scelta, frazioni sì/no |
 | `statistics` | dati di ogni modalità, modalità scelta |
-| `functions` | funzione, parametri di tabella e analisi, vista scelta, gradi o radianti |
+| `functions` | funzioni f e g, parametri di tabella e analisi, vista scelta, gradi o radianti |
+
+### Colori e tema
+
+`ui/Theme.kt` raccoglie i colori. `ColorTheme` è la scelta dell'utente (⋮ → Colori, salvata in
+`calculator`): **corallo** (predefinito) e **azzurro** sono tavolozze fisse chiare e scure in `Schemes`, uguali
+su tutte le versioni di Android; **dal sistema** usa le risorse di `values-v31` (colori dinamici) e c'è solo
+da Android 12. `Palette` espone i ruoli di Material 3 usati dalle schermate (sfondo, contenitori, accento,
+contorni, colori dei tasti). Ogni schermata chiama `applyColorTheme()` prima di `super.onCreate()`: imposta
+uno dei temi `Theme.Calcolatrice(.Coral/.Blue)`, che danno sfondo della finestra e accento di dialoghi e menu.
+Cambiando colori `MainActivity` si ricrea; le altre schermate li leggono all'apertura.
+
+Stile Material 3 Expressive, senza librerie: tasti a pillola che si squadrano quando li premi e tornano
+tondi con una molla (`SpringInterpolator`), vibrazione di conferma su "=" (da Android 11), chip per DEG/RAD e
+Frazioni (`Chip`), contenitori tonali con angoli di 28 dp per pannello scientifico e risultati.
 
 ### Icona
 
-Icona adattiva (`mipmap-anydpi-v26/ic_launcher.xml`, sufficiente con minSdk 26) a tre livelli vettoriali di
-108 dp: sfondo con un gradiente leggero (`drawable/ic_launcher_background.xml`), primo piano con i quattro
-tasti + − × = in una griglia di 48 dp (`ic_launcher_foreground.xml`) e livello monocromatico per le icone a
-tema di Android 13+ (`ic_launcher_monochrome.xml`). Tutto il disegno sta nel cerchio della zona sicura di
-66 dp, quindi nessuna maschera del launcher lo taglia; niente ombre né forme ritagliate a mano.
-I tre file si rigenerano con `python3 tools/make_icon.py app/src/main/res <cartella>`, che salva nella
-cartella anche le anteprime SVG con le maschere tonda, squircle, arrotondata e a tema.
+Due icone adattive (`mipmap-anydpi-v26/ic_launcher.xml` corallo e `ic_launcher_blue.xml` azzurra, sufficienti
+con minSdk 26) a tre livelli vettoriali di 108 dp: sfondo con un gradiente leggero
+(`drawable/ic_launcher[_blue]_background.xml`), primo piano con i quattro tasti + − × = in una griglia di 48 dp
+(`ic_launcher[_blue]_foreground.xml`) e livello monocromatico comune per le icone a tema di Android 13+
+(`ic_launcher_monochrome.xml`). Tutto il disegno sta nel cerchio della zona sicura di 66 dp, quindi nessuna
+maschera del launcher lo taglia; niente ombre né forme ritagliate a mano. I file si rigenerano con
+`python3 tools/make_icon.py app/src/main/res <cartella>`, che salva nella cartella anche le anteprime SVG.
 L'icona da 512 px per il Play Store non fa parte dell'APK: si esporta dalle stesse anteprime.
+
+L'icona sulla Home segue i colori scelti. `MainActivity` non compare da sola tra le app: il manifest dichiara
+due `activity-alias` (`.IconCoral`, attivo, e `.IconBlue`, spento), ognuno con la sua icona e le sue scorciatoie
+(`shortcuts.xml` e `shortcuts_blue.xml`). `LauncherIcon.apply` accende quello giusto e spegne l'altro con
+`setComponentEnabledSetting(…, DONT_KILL_APP)`, prima il nuovo, così l'app non resta mai senza icona. Su alcuni
+launcher l'icona sparisce dalla Home e va riaggiunta, e l'app può chiudersi un attimo: per questo, prima di
+cambiare icona, un dialogo avvisa. Con "dal sistema" resta l'icona corallo.
+
+### Tablet, pieghevoli e accessibilità
+
+- Da 840 dp di larghezza (classe "expanded" di Material 3) la calcolatrice mostra la cronologia in un pannello
+  fisso a destra, aggiornato solo quando la cronologia cambia; sotto quella larghezza la cronologia resta un dialogo.
+- TalkBack legge le formule a parole: display, anteprima, risultati di equazioni, statistica e funzioni hanno
+  come `contentDescription` il testo di `SpokenMath.describe` nella lingua del telefono.
 
 ### Scorciatoie dell'icona
 
@@ -285,4 +322,5 @@ git push origin v1.2.0
 
 - **Nome del pacchetto:** `applicationId` in `app/build.gradle.kts` (e `targetPackage` in `res/xml/shortcuts.xml`). Va deciso prima di distribuire l'app.
 - **Nome dell'app:** `app/src/main/res/values-it/strings.xml` (italiano) e `values/strings.xml` (inglese).
-- **Colori:** `app/src/main/res/values*/colors.xml` (le cartelle `-v31` contengono i colori dinamici di Android 12+).
+- **Colori:** le tavolozze corallo e azzurra sono in `ui/Theme.kt` (`Schemes`), i colori delle finestre e dei
+  dialoghi in `res/values*/colors.xml` (le cartelle `-v31` contengono i colori dinamici di Android 12+).

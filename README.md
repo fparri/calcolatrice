@@ -1,7 +1,7 @@
 # Calcolatrice
 
 Una calcolatrice scientifica per Android, leggera e senza pubblicità, pensata per le scuole superiori:
-funzioni, variabili e memoria, equazioni, disequazioni e sistemi, grafici, derivate e integrali, statistica e probabilità.
+funzioni, variabili, equazioni, disequazioni e sistemi, grafici, derivate e integrali, statistica e probabilità.
 Non chiede nessun permesso e non si collega a Internet: i tuoi calcoli restano sul telefono.
 
 Funziona su **Android 8.0 o successivo**, su telefoni, tablet e Chromebook.
@@ -22,37 +22,43 @@ Funziona su **Android 8.0 o successivo**, su telefoni, tablet e Chromebook.
   MCD e mcm, distribuzioni binomiale e normale.
 - **Precisione a 34 cifre** in tutti i calcoli, funzioni scientifiche comprese: anche dopo molti passaggi
   il risultato mostrato è esatto (per esempio (√2)² fa proprio 2).
-- **Variabili e memoria** (A, B, C, D, X, Y e M), con **SOLVE** per trovare X in un'equazione.
+- **Variabili** A, B, C, D, X e Y, per riusare i risultati nei problemi a più passaggi.
+- **Notazione scientifica** con il tasto **×10ⁿ**: 6,02×10²³ si scrive `6,02` **×10ⁿ** `23`.
 - **Risultati in forma esatta o in decimale:** frazioni, radici e multipli di π (√8 = `2√2`, sin 60° = `√3/2`),
-  e formato dei numeri a scelta: normale, decimali fissi, notazione scientifica o ingegneristica.
+  con le frazioni scritte su due livelli, e formato dei numeri a scelta: normale, decimali fissi o notazione scientifica.
 - **Display su una riga:** le cifre si rimpiccioliscono man mano che l'espressione si allunga.
 - **Cursore:** tocca l'espressione per correggerla in qualunque punto.
 - **Equazioni e sistemi:** sistemi lineari a 2 e 3 incognite, equazioni di secondo e terzo grado.
 - **Disequazioni:** di primo e secondo grado, anche a sistema, con le soluzioni scritte come a scuola.
-- **Funzioni e grafici:** tabella dei valori, grafico da esplorare con le dita, derivata in un punto,
-  integrale definito e zeri in un intervallo.
+- **Funzioni e grafici:** una o due funzioni insieme, tabella dei valori, grafico da esplorare con le dita,
+  derivata in un punto, integrale definito, zeri e punti d'intersezione in un intervallo.
 - **Statistica:** media, moda, deviazione standard, quartili, dati con frequenze e retta di regressione.
 - **Gradi e radianti**, con valori esatti per gli angoli notevoli (sin 180° = 0; tan 90° non è definita).
 - **Tutto resta salvato:** il calcolo in corso, la cronologia degli ultimi 100 calcoli, le variabili, i dati.
 - **Numeri scritti come nella tua lingua** (1.234,5 in italiano, 1,234.5 in inglese) ed esponenti
   in apice (3², 10⁻³).
-- **Tema chiaro e scuro** automatici e, da Android 12, colori abbinati al tuo sfondo.
+- **Tema chiaro e scuro** automatici, con tre scelte di colori: **corallo**, **azzurro** e, da Android 12,
+  **dal sistema** (abbinati allo sfondo del telefono). L'icona dell'app segue il colore scelto.
+- **Tablet e pieghevoli:** sugli schermi larghi la cronologia resta sempre visibile a fianco.
 - **Italiano e inglese**. Da Android 13 puoi scegliere la lingua solo per questa app dalle impostazioni.
-- **Accessibile con TalkBack:** ogni tasto ha una descrizione e il risultato viene letto ad alta voce.
+- **Accessibile con TalkBack:** ogni tasto ha una descrizione e i risultati vengono letti a parole
+  ("3 quarti", "x al quadrato", "6,02 per 10 alla 23").
 
 ## Come si usa
 
 | Per… | Fai così |
 |---|---|
 | Vedere le funzioni scientifiche | In verticale tocca la freccia accanto alla prima riga di funzioni. Gira il telefono per averle tutte insieme al tastierino. |
-| Usare le funzioni inverse (sin⁻¹, eˣ, x²…) | Tocca **INV**. |
-| Passare da gradi a radianti | Tocca **DEG/RAD**, oppure la scritta in alto a sinistra. |
+| Usare le funzioni inverse (sin⁻¹, cos⁻¹, tan⁻¹, eˣ, 10ˣ) | Tocca **INV**. |
+| Passare da gradi a radianti | Tocca **DEG** (o **RAD**) in alto a sinistra. |
 | Aprire e chiudere le parentesi | Il tasto **( )** capisce da solo se aprire o chiudere. Le parentesi lasciate aperte vengono chiuse al momento del calcolo. |
 | Correggere l'espressione | Tocca il punto da correggere: compare il cursore. ⌫ cancella il carattere prima del cursore e i tasti scrivono lì. Se l'espressione è più lunga dello schermo, i **…** indicano la parte nascosta: toccali per spostarti. |
 | Continuare dal risultato | Dopo **=** premi un operatore: il calcolo riparte dal risultato. Se digiti un numero, ne inizi uno nuovo. |
-| Vedere il risultato in forma esatta | Tocca **a/b** in alto: 1 ÷ 3 = `1/3`, √8 = `2√2`, sin⁻¹(1) in radianti = `π/2`. Toccalo di nuovo per tornare ai decimali. |
+| Vedere il risultato in forma esatta | Tocca **Frazioni** in alto (compare il segno di spunta): 1 ÷ 3 = `1/3`, √8 = `2√2`, sin⁻¹(1) in radianti = `π/2`. Toccalo di nuovo per tornare ai decimali. |
+| Scrivere un numero in notazione scientifica | Scrivi la mantissa, tocca **×10ⁿ** e poi l'esponente (il segno meno con **−**): `1,6` **×10ⁿ** `−19`. |
 | Usare le altre funzioni (nCr, MCD, log in base b…) | Tocca **MATH** e scegli la funzione. Se ha più valori, separali con il tasto **;**: `nCr(10; 3)`. |
-| Cambiare il formato dei numeri | Tocca **NORM** in alto (vedi [Formato dei numeri](#formato-dei-numeri)). |
+| Cambiare il formato dei numeri | Tocca **⋮ → Formato dei numeri** (vedi [Formato dei numeri](#formato-dei-numeri)). |
+| Cambiare i colori | Tocca **⋮ → Colori**: corallo, azzurro o dal sistema. Cambia anche l'icona dell'app: su alcuni telefoni sparisce dalla Home e va riaggiunta dall'elenco delle app. |
 | Riusare un calcolo precedente | Tocca l'icona della cronologia in alto a destra, poi il calcolo che ti interessa. |
 | Aprire equazioni, funzioni, statistica e il resto | Tocca **⋮** in alto a destra. Oppure tieni premuta l'icona dell'app sulla schermata Home. |
 | Copiare il risultato | Tieni premuto sul display. |
@@ -90,7 +96,7 @@ Per una coda usa un numero molto grande: P(X ≥ 180) = `NormC(180; 1E99; 175; 1
 
 ### Forma esatta
 
-Con **a/b** attivo i risultati compaiono, quando è possibile, in forma esatta: frazioni (`11/12`),
+Con **Frazioni** attivo i risultati compaiono, quando è possibile, in forma esatta: frazioni (`11/12`),
 radici (`2√2`, `√6/3`) e multipli di π (`3π/4`). La forma esatta si riconosce dal valore calcolato con
 34 cifre: per questo funziona anche dopo calcoli lunghi. Restano decimali le somme di radici diverse
 (√2 + √3) e i numeri come (1 + √5)/2.
@@ -104,42 +110,30 @@ denominatore sotto (anche `√3/2`, `3π/4` e le parti immaginarie). Quando le c
 **√** si applica al numero o alla parentesi che la segue: `√9 + 16` fa 3 + 16 = 19. Per la radice di
 un'espressione usa le parentesi: `√(9 + 16)` = 5.
 
-## Variabili e memoria
+## Variabili
 
-I tasti si trovano nell'ultima riga delle funzioni scientifiche.
+Il tasto **VAR** si trova nell'ultima riga delle funzioni scientifiche.
 
-- **VAR** mostra le variabili A, B, C, D, X, Y e la memoria M con i loro valori. Tocca una variabile
-  per inserirla nel calcolo (per esempio `2 × A`); tocca **STO** accanto a una variabile per salvarci
-  il risultato. Se c'è un calcolo non ancora fatto, STO lo calcola prima.
-- **M+** aggiunge il risultato alla memoria M; tenendolo premuto lo sottrae (M−). Quando la memoria
-  contiene un valore, in alto compare una **M**.
-- **X** inserisce la variabile X, usata da SOLVE.
+- **VAR** mostra le variabili A, B, C, D, X e Y con i loro valori. Tocca una variabile per inserirla
+  nel calcolo (per esempio `2 × A`); tocca **STO** accanto a una variabile per salvarci il risultato.
+  Se c'è un calcolo non ancora fatto, STO lo calcola prima.
 - Le variabili non ancora usate valgono 0, e restano salvate anche chiudendo l'app.
+- Equazioni, funzioni e statistica possono salvare i loro risultati nelle stesse variabili.
 
-Non c'è la variabile E, perché la E indica la notazione scientifica (`1,5E20`).
+Non c'è la variabile E: sulla tastiera fisica la E maiuscola scrive ×10ⁿ.
 
-### SOLVE: trovare X
-
-Scrivi un'espressione che contiene X e premi **SOLVE**: la calcolatrice cerca un valore di X per cui
-l'espressione vale **zero**, lo mostra (`X = 1,414…`) e lo salva in X.
-
-- Per risolvere `X² = 2` scrivi `X² − 2`.
-- La ricerca parte dal valore attuale di X. Se un'equazione ha più soluzioni, per trovarne un'altra
-  salva in X un valore vicino (con STO) e premi di nuovo SOLVE.
-- Funziona con qualunque funzione, per esempio `cos(X) − X` oppure `sin(X) − 0,5`.
-- Se non esiste una soluzione reale (come per `X² + 1`) compare "Soluzione non trovata".
-- Un valore "quasi zero" non basta: `(X − 1)² + 10⁻³⁰` non ha soluzioni, perché è sempre positiva.
+Per trovare la X che rende zero un'espressione usa **Funzioni e grafici**: scrivi l'espressione come
+f(x) e leggi gli zeri nella vista **Analisi**, che li mostra anche sul grafico.
 
 ## Formato dei numeri
 
-Tocca **NORM** in alto (oppure ⋮ → Formato dei numeri) per scegliere come vengono mostrati i risultati:
+Tocca **⋮ → Formato dei numeri** per scegliere come vengono mostrati i risultati:
 
 | Formato | Esempio con 1234,5678 | Quando serve |
 |---|---|---|
 | Normale (**NORM**) | 1.234,5678 | Uso di tutti i giorni: fino a 15 cifre. |
 | Decimali fissi (**FIX**) | FIX 2: 1.234,57 | Soldi, misure: sempre lo stesso numero di decimali. |
-| Notazione scientifica (**SCI**) | SCI 3: 1,23E3 | Numeri molto grandi o molto piccoli, con le cifre che ti servono. |
-| Notazione ingegneristica (**ENG**) | 1,2345678E3 | Esponenti multipli di 3, che corrispondono a kilo, mega, milli, micro… |
+| Notazione scientifica (**SCI**) | SCI 3: 1,23×10³ | Numeri molto grandi o molto piccoli, con le cifre che ti servono. |
 
 Il formato cambia solo come vedi il risultato: i calcoli continuano a usare tutte le cifre.
 Vale anche per le schermate di equazioni e statistica.
@@ -148,7 +142,8 @@ Vale anche per le schermate di equazioni e statistica.
 
 Tutti i calcoli, funzioni scientifiche comprese, sono fatti con 34 cifre significative; a schermo ne
 vedi al massimo 15. Oltre questo limite, o per numeri molto piccoli, si passa alla notazione
-scientifica (per esempio `1,5E20` significa 1,5 × 10²⁰). La calcolatrice gestisce numeri fino a 10⁹⁹⁹⁹.
+scientifica (per esempio `1,5×10²⁰`). La calcolatrice gestisce numeri fino a 10⁹⁹⁹⁹. Copiando un
+risultato in notazione scientifica si ottiene la forma con la E (`1,5E20`), che le altre app capiscono.
 
 ### Messaggi di errore
 
@@ -158,7 +153,6 @@ scientifica (per esempio `1,5E20` significa 1,5 × 10²⁰). La calcolatrice ges
 | Risultato non definito | L'operazione non ha un risultato reale, per esempio `√−4`, `ln 0` o `tan 90°`. |
 | Numero troppo grande | Il risultato supera 10⁹⁹⁹⁹, per esempio `5000!`. |
 | Espressione non valida | Manca qualcosa, per esempio un numero dopo un operatore. |
-| Soluzione non trovata | SOLVE non ha trovato un valore di X che renda zero l'espressione. |
 
 ## Equazioni e sistemi
 
@@ -203,7 +197,7 @@ Con **Diseq.** risolvi disequazioni del tipo ax² + bx + c > 0 (con a = 0 sono d
 | x² + 1 < 0 | Nessuna soluzione |
 | sistema: x² − 2x − 3 ≥ 0 e x − 5 ≤ 0 | x ≤ −1 ∨ 3 ≤ x ≤ 5 |
 
-**Forma esatta o decimali:** il tasto **a/b** in alto a destra passa dai risultati in forma esatta
+**Forma esatta o decimali:** il chip **Frazioni** in alto a destra passa dai risultati in forma esatta
 (`x = −3/4`, `x = √2`, `x = −1/2 + (√3/2)i`) a quelli decimali (`x = −0,75`) e viceversa.
 
 Altre cose utili:
@@ -217,16 +211,19 @@ Altre cose utili:
 
 Tocca **⋮ → Funzioni e grafici**, oppure tieni premuta l'icona dell'app e scegli **Funzioni**.
 
-In alto scrivi la funzione `f(x) =` usando il tasto **X**. Sotto scegli una delle tre viste:
+In alto scrivi la funzione `f(x) =` usando il tasto **X**. Se vuoi confrontarla con un'altra, scrivila
+nella casella `g(x) =` (è facoltativa). Sotto scegli una delle tre viste:
 
 | Vista | Cosa ottieni |
 |---|---|
-| **Tabella** | I valori di f(x) a partire da x = **da**, con il **passo** scelto (per esempio da −5 con passo 0,5). Dove la funzione non è definita compare "non def.". |
-| **Grafico** | Il grafico di f. **Trascina** per spostarti, **avvicina due dita** per ingrandire, **doppio tocco** per tornare alla vista iniziale, **tocca** un punto per leggerne le coordinate. |
-| **Analisi** | Scrivi x₀, a e b, poi premi **=**: ottieni f(x₀), la derivata f′(x₀), l'integrale da a a b e gli zeri di f tra a e b. |
+| **Tabella** | I valori di f(x) (e di g(x)) a partire da x = **da**, con il **passo** scelto (per esempio da −5 con passo 0,5). Dove la funzione non è definita compare "non def.". |
+| **Grafico** | Il grafico di f, e quello di g tratteggiato, con i punti d'incontro cerchiati. **Trascina** per spostarti, **avvicina due dita** per ingrandire, **doppio tocco** per tornare alla vista iniziale, **tocca** un punto per leggerne le coordinate. |
+| **Analisi** | Scrivi x₀, a e b, poi premi **=**: ottieni f(x₀), la derivata f′(x₀), l'integrale da a a b, gli zeri di f tra a e b e, se c'è g, i punti d'intersezione dei due grafici tra a e b. |
 
-- Il tasto **DEG/RAD** in alto sceglie gradi o radianti; per i grafici delle funzioni goniometriche si usano di solito i radianti.
-- Il tasto **a/b** in alto mostra i risultati in forma esatta: ∫₀¹ (x² + x + 3) dx = `23/6`, zeri come `√2`.
+- **RAD/DEG** in alto sceglie radianti o gradi; per i grafici delle funzioni goniometriche si usano di solito i radianti.
+- **Frazioni** in alto mostra i risultati in forma esatta: ∫₀¹ (x² + x + 3) dx = `23/6`, zeri come `√2`.
+- Con g puoi risolvere graficamente equazioni e disequazioni: per x² = x + 2 scrivi f = x², g = x + 2
+  e leggi le intersezioni (−1; 1) e (2; 4).
 - **◀** e **▶** passano da una casella all'altra; **AC** cancella la casella, tenendolo premuto ricominci da capo.
 - La derivata è calcolata numericamente: dove la funzione ha uno spigolo (come |x| in 0) compare "non derivabile".
 - Gli integrali funzionano anche con estremi difficili, come ∫₀¹ 1/√x dx = 2. Se l'integrale non esiste

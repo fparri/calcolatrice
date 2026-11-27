@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Scorciatoie dell'icona azzurra: uguali a shortcuts.xml, con le icone azzurre.
+    Aprono MainActivity (l'unica schermata esportata) con un'azione, e MainActivity passa
+    alla schermata richiesta. targetPackage deve coincidere con applicationId in app/build.gradle.kts.
+-->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/shortcut_equations_blue"
+        android:shortcutId="equations"
+        android:shortcutLongLabel="@string/equations"
+        android:shortcutShortLabel="@string/shortcut_equations_short">
+        <intent
+            android:action="io.github.calcolatrice.action.EQUATIONS"
+            android:targetClass="io.github.calcolatrice.MainActivity"
+            android:targetPackage="io.github.calcolatrice" />
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/shortcut_statistics_blue"
+        android:shortcutId="statistics"
+        android:shortcutLongLabel="@string/statistics"
+        android:shortcutShortLabel="@string/shortcut_statistics_short">
+        <intent
+            android:action="io.github.calcolatrice.action.STATISTICS"
+            android:targetClass="io.github.calcolatrice.MainActivity"
+            android:targetPackage="io.github.calcolatrice" />
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/shortcut_functions_blue"
+        android:shortcutId="functions"
+        android:shortcutLongLabel="@string/functions"
+        android:shortcutShortLabel="@string/shortcut_functions_short">
+        <intent
+            android:action="io.github.calcolatrice.action.FUNCTIONS"
+            android:targetClass="io.github.calcolatrice.MainActivity"
+            android:targetPackage="io.github.calcolatrice" />
+    </shortcut>
+</shortcuts>

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Tema scuro: vedi values/colors.xml -->
+    <color name="background">#FF1A110F</color>
+    <color name="on_background">#FFF1DFDA</color>
+    <color name="on_background_variant">#FFD8C2BD</color>
+    <color name="panel">#FF271D1B</color>
+    <color name="accent">#FFFFB4A3</color>
+    <color name="on_accent">#FF5F1608</color>
+    <color name="outline">#FF534341</color>
+    <color name="error">#FFFFB4AB</color>
+    <color name="key_number">#FF3A2E2B</color>
+    <color name="key_operator">#FF5D3F37</color>
+    <color name="on_key_operator">#FFFFDAD0</color>
+    <color name="key_clear">#FF574400</color>
+    <color name="on_key_clear">#FFFFE08A</color>
+
+    <color name="coral_background">#FF1A110F</color>
+    <color name="coral_panel">#FF271D1B</color>
+    <color name="coral_accent">#FFFFB4A3</color>
+    <color name="blue_background">#FF10141A</color>
+    <color name="blue_panel">#FF1C2026</color>
+    <color name="blue_accent">#FFA2C9FF</color>
+</resources>

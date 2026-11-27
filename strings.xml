@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Calcolatrice</string>
+    <string name="history">Cronologia</string>
+    <string name="history_empty">Nessun calcolo per ora</string>
+    <string name="clear_history">Cancella</string>
+    <string name="copied">Copiato negli appunti</string>
+    <string name="angle_degrees">Gradi</string>
+    <string name="angle_radians">Radianti</string>
+    <string name="angle_toggle">Unità angolare: %1$s</string>
+    <string name="inverse">Funzioni inverse</string>
+    <string name="show_scientific">Mostra funzioni scientifiche</string>
+    <string name="hide_scientific">Nascondi funzioni scientifiche</string>
+    <string name="error_division_by_zero">Impossibile dividere per zero</string>
+    <string name="error_undefined">Risultato non definito</string>
+    <string name="error_overflow">Numero troppo grande</string>
+    <string name="error_syntax">Espressione non valida</string>
+    <string name="key_plus">più</string>
+    <string name="key_minus">meno</string>
+    <string name="key_multiply">per</string>
+    <string name="key_divide">diviso</string>
+    <string name="key_equals">uguale</string>
+    <string name="key_decimal">virgola</string>
+    <string name="key_percent">percento</string>
+    <string name="key_backspace">Cancella</string>
+    <string name="key_clear">Cancella tutto</string>
+    <string name="key_parentheses">parentesi</string>
+    <string name="key_power">elevato a</string>
+    <string name="key_sqrt">radice quadrata</string>
+    <string name="key_square">al quadrato</string>
+    <string name="key_reciprocal">reciproco</string>
+    <string name="key_factorial">fattoriale</string>
+    <string name="key_pi">pi greco</string>
+    <string name="key_e">numero di Nepero</string>
+    <string name="key_sin">seno</string>
+    <string name="key_cos">coseno</string>
+    <string name="key_tan">tangente</string>
+    <string name="key_asin">arcoseno</string>
+    <string name="key_acos">arcocoseno</string>
+    <string name="key_atan">arcotangente</string>
+    <string name="key_ln">logaritmo naturale</string>
+    <string name="key_log">logaritmo in base 10</string>
+    <string name="key_exp_e">e elevato a</string>
+    <string name="key_exp_10">dieci elevato a</string>
+    <string name="close">Chiudi</string>
+
+    <!-- Equazioni e sistemi -->
+    <string name="equations">Equazioni e sistemi</string>
+    <string name="back">Indietro</string>
+    <string name="mode_system_2">2×2</string>
+    <string name="mode_system_3">3×3</string>
+    <string name="mode_quadratic">2° grado</string>
+    <string name="mode_system_2_description">Sistema di due equazioni in due incognite</string>
+    <string name="mode_system_3_description">Sistema di tre equazioni in tre incognite</string>
+    <string name="mode_quadratic_description">Equazione di secondo grado</string>
+    <string name="show_fractions">Risultati in forma esatta: frazioni, radici e π</string>
+    <string name="previous_coefficient">Coefficiente precedente</string>
+    <string name="next_coefficient">Coefficiente successivo</string>
+    <string name="clear_coefficient">Cancella coefficiente. Tieni premuto per cancellare tutto</string>
+    <string name="solve">Risolvi</string>
+    <string name="solve_hint">Inserisci i coefficienti e premi =</string>
+    <string name="cell_description">Equazione %1$d, coefficiente %2$s: %3$s</string>
+    <string name="no_solution">Nessuna soluzione</string>
+    <string name="infinite_solutions">Infinite soluzioni</string>
+    <string name="no_real_solution">Nessuna soluzione reale</string>
+    <string name="double_root">Soluzione doppia</string>
+    <string name="linear_equation">a = 0: equazione di primo grado</string>
+    <string name="vertex_minimum">Minimo: x = %1$s; y = %2$s</string>
+    <string name="vertex_maximum">Massimo: x = %1$s; y = %2$s</string>
+
+    <!-- Menu, formato dei numeri, variabili e memoria -->
+    <string name="more_options">Altre opzioni</string>
+    <string name="statistics">Statistica</string>
+    <string name="variables">Variabili</string>
+    <string name="number_format">Formato dei numeri</string>
+    <string name="format_normal">Normale</string>
+    <string name="format_fix">Decimali fissi (Fix)</string>
+    <string name="format_sci">Notazione scientifica (Sci)</string>
+    <string name="format_fix_digits">Numero di decimali</string>
+    <string name="format_sci_digits">Cifre significative</string>
+    <string name="key_variables">Variabili</string>
+    <string name="key_variable">variabile %1$s</string>
+    <string name="store_description">Salva il risultato in %1$s</string>
+    <string name="insert_variable">Inserisci %1$s, valore %2$s</string>
+    <string name="clear_variables">Azzera tutte</string>
+    <string name="error_no_solution">Soluzione non trovata</string>
+    <string name="save_to_variable">Salva in una variabile</string>
+    <string name="choose_value">Quale valore?</string>
+    <string name="saved_in">Salvato in %1$s</string>
+
+    <!-- Equazioni di terzo grado -->
+    <string name="mode_cubic">3° grado</string>
+    <string name="mode_cubic_description">Equazione di terzo grado</string>
+    <string name="quadratic_equation">a = 0: equazione di secondo grado</string>
+
+    <!-- Statistica -->
+    <string name="stat_one_variable">1 variabile</string>
+    <string name="stat_regression">Regressione</string>
+    <string name="stat_one_variable_description">Statistica a una variabile</string>
+    <string name="stat_regression_description">Regressione lineare y = a + bx</string>
+    <string name="stat_hint">Inserisci i dati e premi =</string>
+    <string name="stat_results_hint">Tocca per salvare un risultato in una variabile</string>
+    <string name="stat_not_enough">Inserisci almeno un valore</string>
+    <string name="stat_not_enough_regression">Servono almeno due punti</string>
+    <string name="stat_cell_description">Riga %1$d, %2$s: %3$s</string>
+    <string name="delete_row">Elimina riga</string>
+
+    <!-- Scorciatoie dell'icona -->
+    <string name="shortcut_equations_short">Equazioni</string>
+    <string name="shortcut_statistics_short">Statistica</string>
+
+    <!-- Menu MATH -->
+    <string name="key_math">Funzioni matematiche</string>
+    <string name="key_separator">separatore tra i valori</string>
+    <string name="key_nth_root">radice n-esima</string>
+    <string name="math_menu_title">Funzioni</string>
+    <string name="math_hint">Separa i valori con il tasto ;</string>
+    <string name="math_abs">Valore assoluto</string>
+    <string name="math_root">Radice n-esima di x</string>
+    <string name="math_log_base">Logaritmo di x in base b</string>
+    <string name="math_ncr">Combinazioni semplici di n elementi a k a k</string>
+    <string name="math_npr">Disposizioni semplici di n elementi a k a k</string>
+    <string name="math_gcd">Massimo comune divisore</string>
+    <string name="math_lcm">Minimo comune multiplo</string>
+    <string name="math_binp">Binomiale: probabilità di esattamente k successi in n prove</string>
+    <string name="math_binc">Binomiale: probabilità di al massimo k successi in n prove</string>
+    <string name="math_normc">Normale: probabilità tra a e b, con media μ e deviazione standard σ (senza: normale standardizzata)</string>
+    <string name="fn_gcd">MCD</string>
+    <string name="fn_lcm">mcm</string>
+
+    <!-- Disequazioni -->
+    <string name="mode_inequality">Diseq.</string>
+    <string name="mode_inequality_description">Disequazione ax² + bx + c maggiore o minore di 0, oppure sistema di due</string>
+    <string name="inequality_hint">Tocca il segno per cambiarlo. La seconda riga è facoltativa: compilala per risolvere un sistema.</string>
+    <string name="inequality_system">Sistema di due disequazioni</string>
+    <string name="all_real_solutions">Ogni x reale è soluzione</string>
+    <string name="relation_description">Disequazione %1$d: %2$s zero. Tocca per cambiare</string>
+    <string name="relation_greater">maggiore di</string>
+    <string name="relation_greater_equal">maggiore o uguale a</string>
+    <string name="relation_less">minore di</string>
+    <string name="relation_less_equal">minore o uguale a</string>
+
+    <!-- Funzioni: tabella, grafico, analisi -->
+    <string name="functions">Funzioni e grafici</string>
+    <string name="shortcut_functions_short">Funzioni</string>
+    <string name="tab_table">Tabella</string>
+    <string name="tab_graph">Grafico</string>
+    <string name="tab_analysis">Analisi</string>
+    <string name="tab_table_description">Tabella dei valori</string>
+    <string name="tab_graph_description">Grafico della funzione</string>
+    <string name="tab_analysis_description">Derivata, integrale e zeri</string>
+    <string name="function_hint">Scrivi una funzione di X</string>
+    <string name="function_cell_description">Funzione f di x: %1$s</string>
+    <string name="table_from">da</string>
+    <string name="table_step">passo</string>
+    <string name="parameter_description">%1$s: %2$s</string>
+    <string name="undefined_short">non def.</string>
+    <string name="analysis_hint">Premi = per calcolare f(x₀), f′(x₀), l\'integrale da a a b e gli zeri tra a e b</string>
+    <string name="analysis_running">Calcolo in corso…</string>
+    <string name="analysis_zeros">Zeri tra a e b</string>
+    <string name="analysis_no_zeros">nessuno</string>
+    <string name="analysis_approximate">≈ valore approssimato: l\'integrale potrebbe non convergere</string>
+    <string name="not_differentiable">non derivabile</string>
+    <string name="graph_hint">Tocca per leggere un punto · doppio tocco per ricentrare</string>
+    <string name="graph_description">Grafico di f(x) per x da %1$s a %2$s</string>
+    <string name="graph_empty">Scrivi una funzione di X per vederne il grafico</string>
+    <string name="key_variable_x">variabile X</string>
+    <string name="clear_cell">Cancella la casella. Tieni premuto per ricominciare da capo</string>
+
+    <!-- Statistica con frequenze -->
+    <string name="stat_frequency">Frequenze</string>
+    <string name="stat_frequency_description">Valori x con le loro frequenze f</string>
+
+    <string name="fraction_short">Frazioni</string>
+
+    <!-- Colori e icona -->
+    <string name="colors">Colori</string>
+    <string name="colors_coral">Corallo</string>
+    <string name="colors_blue">Azzurro</string>
+    <string name="colors_system">Dal sistema (sfondo del telefono)</string>
+    <string name="icon_change_title">Cambierà anche l\'icona dell\'app</string>
+    <string name="icon_change_message">Su alcuni telefoni l\'icona sparisce dalla schermata Home: in quel caso riaggiungila dall\'elenco delle app. L\'app potrebbe anche chiudersi un attimo.</string>
+    <string name="icon_change_confirm">Cambia</string>
+
+    <!-- Notazione scientifica -->
+    <string name="key_exponent">Per dieci alla (notazione scientifica)</string>
+
+    <!-- Seconda funzione -->
+    <string name="second_function_hint">Facoltativa: una seconda funzione</string>
+    <string name="second_function_cell_description">Seconda funzione g di x: %1$s</string>
+    <string name="analysis_intersections">Intersezioni di f e g tra a e b</string>
+    <string name="analysis_no_intersections">nessuna</string>
+</resources>

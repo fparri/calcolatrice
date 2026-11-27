@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!--
+        Temi di sistema (nessuna libreria), con barre trasparenti per il layout edge-to-edge.
+        Theme.Calcolatrice usa i colori dinamici (scelta "dal sistema"); .Coral e .Blue le tavolozze
+        fisse. Ogni schermata applica il suo con applyColorTheme() prima di super.onCreate().
+    -->
+    <style name="Theme.Calcolatrice" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/background</item>
+        <item name="android:colorBackground">@color/background</item>
+        <item name="android:colorPrimary">@color/accent</item>
+        <item name="android:colorAccent">@color/accent</item>
+        <item name="android:alertDialogTheme">@style/Theme.Calcolatrice.Dialog</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="27">false</item>
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="28">shortEdges</item>
+        <item name="android:enforceStatusBarContrast" tools:targetApi="29">false</item>
+        <item name="android:enforceNavigationBarContrast" tools:targetApi="29">false</item>
+    </style>
+
+    <style name="Theme.Calcolatrice.Dialog" parent="android:Theme.Material.Dialog.Alert">
+        <item name="android:colorAccent">@color/accent</item>
+        <item name="android:colorBackground">@color/panel</item>
+    </style>
+
+    <style name="Theme.Calcolatrice.Coral" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/coral_background</item>
+        <item name="android:colorBackground">@color/coral_background</item>
+        <item name="android:colorPrimary">@color/coral_accent</item>
+        <item name="android:colorAccent">@color/coral_accent</item>
+        <item name="android:alertDialogTheme">@style/Theme.Calcolatrice.Dialog.Coral</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="27">false</item>
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="28">shortEdges</item>
+        <item name="android:enforceStatusBarContrast" tools:targetApi="29">false</item>
+        <item name="android:enforceNavigationBarContrast" tools:targetApi="29">false</item>
+    </style>
+
+    <style name="Theme.Calcolatrice.Dialog.Coral" parent="android:Theme.Material.Dialog.Alert">
+        <item name="android:colorAccent">@color/coral_accent</item>
+        <item name="android:colorBackground">@color/coral_panel</item>
+    </style>
+
+    <style name="Theme.Calcolatrice.Blue" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/blue_background</item>
+        <item name="android:colorBackground">@color/blue_background</item>
+        <item name="android:colorPrimary">@color/blue_accent</item>
+        <item name="android:colorAccent">@color/blue_accent</item>
+        <item name="android:alertDialogTheme">@style/Theme.Calcolatrice.Dialog.Blue</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="27">false</item>
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="28">shortEdges</item>
+        <item name="android:enforceStatusBarContrast" tools:targetApi="29">false</item>
+        <item name="android:enforceNavigationBarContrast" tools:targetApi="29">false</item>
+    </style>
+
+    <style name="Theme.Calcolatrice.Dialog.Blue" parent="android:Theme.Material.Dialog.Alert">
+        <item name="android:colorAccent">@color/blue_accent</item>
+        <item name="android:colorBackground">@color/blue_panel</item>
+    </style>
+</resources>
